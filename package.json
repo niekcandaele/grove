@@ -1,0 +1,37 @@
+{
+  "name": "ai-env-manager",
+  "version": "0.1.0",
+  "description": "CLI tool for managing git worktrees with automatic port allocation for AI coding agents",
+  "type": "module",
+  "bin": {
+    "ai-env": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "cli",
+    "git",
+    "worktree",
+    "port-management",
+    "ai-agents"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.3",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
+  },
+  "dependencies": {
+    "citty": "^0.1.6"
+  }
+}

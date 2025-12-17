@@ -1,0 +1,351 @@
+import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { getOverridesDir } from "../utils/paths.js";
+import type { PortMappingEntry } from "../config/project.js";
+
+export interface EnvVar {
+  name: string;
+  value: string;
+  line: number;
+}
+
+/**
+ * Parse a .env file into key-value pairs
+ */
+export function parseEnvFile(content: string): Map<string, string> {
+  const vars = new Map<string, string>();
+
+  for (const line of content.split("\n")) {
+    const trimmed = line.trim();
+
+    // Skip empty lines and comments
+    if (!trimmed || trimmed.startsWith("#")) {
+      continue;
+    }
+
+    const eqIndex = trimmed.indexOf("=");
+    if (eqIndex === -1) {
+      continue;
+    }
+
+    const key = trimmed.slice(0, eqIndex).trim();
+    let value = trimmed.slice(eqIndex + 1).trim();
+
+    // Remove surrounding quotes if present
+    if ((value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+
+    vars.set(key, value);
+  }
+
+  return vars;
+}
+
+/**
+ * Find all port variables in .env content matching patterns
+ */
+export function scanPortVariables(
+  content: string,
+  patterns: string[]
+): string[] {
+  const vars = parseEnvFile(content);
+  const portVars: string[] = [];
+
+  for (const key of vars.keys()) {
+    for (const pattern of patterns) {
+      if (matchPattern(key, pattern)) {
+        portVars.push(key);
+        break;
+      }
+    }
+  }
+
+  return portVars;
+}
+
+/**
+ * Match a key against a glob-like pattern (supports * wildcard)
+ */
+function matchPattern(key: string, pattern: string): boolean {
+  // Convert glob pattern to regex
+  const regexStr = pattern
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&")  // Escape special regex chars
+    .replace(/\*/g, ".*");  // Convert * to .*
+
+  const regex = new RegExp(`^${regexStr}$`, "i");
+  return regex.test(key);
+}
+
+/**
+ * Update port values in .env content
+ */
+export function updateEnvPorts(
+  content: string,
+  portMap: Record<string, number>
+): string {
+  const lines = content.split("\n");
+  const result: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    // Skip empty lines and comments - keep as is
+    if (!trimmed || trimmed.startsWith("#")) {
+      result.push(line);
+      continue;
+    }
+
+    const eqIndex = trimmed.indexOf("=");
+    if (eqIndex === -1) {
+      result.push(line);
+      continue;
+    }
+
+    const key = trimmed.slice(0, eqIndex).trim();
+
+    if (key in portMap) {
+      // Replace the value, preserving key and any leading whitespace
+      const leadingWhitespace = line.match(/^\s*/)?.[0] || "";
+      result.push(`${leadingWhitespace}${key}=${portMap[key]}`);
+    } else {
+      result.push(line);
+    }
+  }
+
+  return result.join("\n");
+}
+
+/**
+ * Copy .env.example to .env in worktree, or copy from main worktree
+ */
+export function copyEnvFile(
+  worktreePath: string,
+  mainWorktreePath: string
+): boolean {
+  const envExamplePath = join(worktreePath, ".env.example");
+  const envPath = join(worktreePath, ".env");
+  const mainEnvPath = join(mainWorktreePath, ".env");
+
+  // Priority: .env.example in worktree > .env in main worktree
+  if (existsSync(envExamplePath)) {
+    copyFileSync(envExamplePath, envPath);
+    return true;
+  }
+
+  if (existsSync(mainEnvPath)) {
+    copyFileSync(mainEnvPath, envPath);
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Read, update ports, and write .env file
+ */
+export function configureEnvFile(
+  worktreePath: string,
+  portMap: Record<string, number>
+): void {
+  const envPath = join(worktreePath, ".env");
+
+  if (!existsSync(envPath)) {
+    // Create empty .env with just ports
+    const content = Object.entries(portMap)
+      .map(([key, value]) => `${key}=${value}`)
+      .join("\n");
+    writeFileSync(envPath, content + "\n", { mode: 0o600 });
+    return;
+  }
+
+  const content = readFileSync(envPath, "utf-8");
+  const updated = updateEnvPorts(content, portMap);
+  writeFileSync(envPath, updated, { mode: 0o600 });
+}
+
+/**
+ * Get port variables from .env.example or existing .env
+ */
+export function getPortVariablesFromProject(
+  projectRoot: string,
+  patterns: string[]
+): string[] {
+  const envExamplePath = join(projectRoot, ".env.example");
+  const envPath = join(projectRoot, ".env");
+
+  let content = "";
+
+  if (existsSync(envExamplePath)) {
+    content = readFileSync(envExamplePath, "utf-8");
+  } else if (existsSync(envPath)) {
+    content = readFileSync(envPath, "utf-8");
+  }
+
+  if (!content) {
+    return [];
+  }
+
+  return scanPortVariables(content, patterns);
+}
+
+/**
+ * Append a variable to .env file
+ */
+export function appendToEnvFile(
+  envPath: string,
+  key: string,
+  value: string
+): void {
+  let content = "";
+
+  if (existsSync(envPath)) {
+    content = readFileSync(envPath, "utf-8");
+    if (!content.endsWith("\n")) {
+      content += "\n";
+    }
+  }
+
+  content += `${key}=${value}\n`;
+  writeFileSync(envPath, content, { mode: 0o600 });
+}
+
+/**
+ * Get default container port based on variable name patterns
+ */
+function getDefaultContainerPort(varName: string, hostPort: number): number {
+  const upper = varName.toUpperCase();
+
+  if (upper.includes("HTTP") || upper.includes("WEB") || upper.includes("APP")) {
+    return 3000;
+  }
+  if (upper.includes("POSTGRES") || upper.includes("PG") || upper.includes("DB_PORT")) {
+    return 5432;
+  }
+  if (upper.includes("REDIS")) {
+    return 6379;
+  }
+  if (upper.includes("MONGO")) {
+    return 27017;
+  }
+  if (upper.includes("MYSQL")) {
+    return 3306;
+  }
+
+  return hostPort;
+}
+
+/**
+ * Generate Docker Compose override YAML content
+ */
+export function generateDockerOverride(
+  portMap: Record<string, number>,
+  portMapping: Record<string, string | PortMappingEntry>
+): string {
+  const services: Record<string, string[]> = {};
+
+  for (const [varName, hostPort] of Object.entries(portMap)) {
+    const mapping = portMapping[varName];
+    if (!mapping) continue;
+
+    let serviceName: string;
+    let containerPort: number;
+
+    if (typeof mapping === "string") {
+      serviceName = mapping;
+      containerPort = getDefaultContainerPort(varName, hostPort);
+    } else {
+      serviceName = mapping.service;
+      containerPort = mapping.containerPort;
+    }
+
+    if (!services[serviceName]) {
+      services[serviceName] = [];
+    }
+    services[serviceName].push(`"${hostPort}:${containerPort}"`);
+  }
+
+  if (Object.keys(services).length === 0) {
+    return "";
+  }
+
+  let yaml = "services:\n";
+  for (const [service, ports] of Object.entries(services)) {
+    yaml += `  ${service}:\n`;
+    yaml += `    ports: !override\n`;
+    for (const port of ports) {
+      yaml += `      - ${port}\n`;
+    }
+  }
+
+  return yaml;
+}
+
+/**
+ * Get project hash for directory naming
+ */
+export function getProjectHash(projectRoot: string): string {
+  return createHash("sha256").update(projectRoot).digest("hex").slice(0, 12);
+}
+
+/**
+ * Get the override directory path for a project/environment
+ */
+export function getOverridePath(projectRoot: string, envName: string): string {
+  const hash = getProjectHash(projectRoot);
+  return join(getOverridesDir(), hash, envName);
+}
+
+/**
+ * Write Docker Compose override file outside the repo
+ */
+export function writeDockerOverride(
+  projectRoot: string,
+  envName: string,
+  overrideContent: string
+): string {
+  const overrideDir = getOverridePath(projectRoot, envName);
+  const overridePath = join(overrideDir, "docker-compose.override.yml");
+
+  mkdirSync(overrideDir, { recursive: true });
+  writeFileSync(overridePath, overrideContent, { mode: 0o600 });
+
+  return overridePath;
+}
+
+/**
+ * Set COMPOSE_FILE in .env to point to main compose and override
+ */
+export function setComposeFilePath(
+  worktreePath: string,
+  overridePath: string
+): void {
+  const envPath = join(worktreePath, ".env");
+  appendToEnvFile(envPath, "COMPOSE_FILE", `docker-compose.yml:${overridePath}`);
+}
+
+/**
+ * Check if docker-compose.yml exists in a directory
+ */
+export function hasDockerCompose(dir: string): boolean {
+  return existsSync(join(dir, "docker-compose.yml")) ||
+         existsSync(join(dir, "docker-compose.yaml")) ||
+         existsSync(join(dir, "compose.yml")) ||
+         existsSync(join(dir, "compose.yaml"));
+}
+
+/**
+ * Remove Docker override directory for an environment
+ */
+export function removeDockerOverride(projectRoot: string, envName: string): boolean {
+  const overrideDir = getOverridePath(projectRoot, envName);
+
+  if (existsSync(overrideDir)) {
+    rmSync(overrideDir, { recursive: true, force: true });
+    return true;
+  }
+
+  return false;
+}
