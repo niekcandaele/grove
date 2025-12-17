@@ -7,7 +7,7 @@ import { statusCommand } from "./commands/status.js";
 
 const main = defineCommand({
   meta: {
-    name: "ai-env",
+    name: "grove",
     version: "0.1.0",
     description:
       "CLI tool for managing git worktrees with automatic port allocation",

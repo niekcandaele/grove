@@ -24,7 +24,7 @@ describe("loadProjectConfig", () => {
     expect(config.portRange).toEqual([30000, 39999]);
   });
 
-  it("loads config from .ai-env.json", () => {
+  it("loads config from .grove.json", () => {
     const projectConfig = {
       baseBranch: "develop",
       worktreeDir: "../custom-worktrees",
@@ -36,7 +36,7 @@ describe("loadProjectConfig", () => {
     };
 
     writeFileSync(
-      join(tempDir, ".ai-env.json"),
+      join(tempDir, ".grove.json"),
       JSON.stringify(projectConfig)
     );
 
@@ -57,7 +57,7 @@ describe("loadProjectConfig", () => {
     };
 
     writeFileSync(
-      join(tempDir, ".ai-env.json"),
+      join(tempDir, ".grove.json"),
       JSON.stringify(projectConfig)
     );
 

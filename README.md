@@ -1,4 +1,4 @@
-# ai-env-manager
+# grove
 
 CLI tool for managing git worktrees with automatic port allocation, designed for running multiple AI coding agents on the same project simultaneously.
 
@@ -21,31 +21,31 @@ This tool solves all three.
 
 ```bash
 # Run directly with npx
-npx ai-env-manager create my-feature
+npx grove create my-feature
 
 # Or install globally
-npm install -g ai-env-manager
-ai-env create my-feature
+npm install -g grove
+grove create my-feature
 ```
 
 ## Quick Start
 
 ```bash
 # In your project root
-ai-env create feature-auth
+grove create feature-auth
 # Creates worktree, allocates ports, configures .env
 
 # Switch to the new environment
-eval "$(ai-env activate feature-auth)"
+eval "$(grove activate feature-auth)"
 
 # See all environments
-ai-env list
+grove list
 
 # Check status
-ai-env status
+grove status
 
 # Clean up when done
-ai-env delete feature-auth --delete-branch
+grove delete feature-auth --delete-branch
 ```
 
 ## Commands
@@ -55,7 +55,7 @@ ai-env delete feature-auth --delete-branch
 Create a new environment with git worktree and automatic port allocation.
 
 ```bash
-ai-env create <name> [--verbose]
+grove create <name> [--verbose]
 ```
 
 - Creates git branch and worktree
@@ -68,7 +68,7 @@ ai-env create <name> [--verbose]
 Output shell command to change to worktree directory.
 
 ```bash
-eval "$(ai-env activate <name>)"
+eval "$(grove activate <name>)"
 ```
 
 ### list
@@ -76,7 +76,7 @@ eval "$(ai-env activate <name>)"
 Show all environments for the current project.
 
 ```bash
-ai-env list [--verbose]
+grove list [--verbose]
 ```
 
 ### delete
@@ -84,7 +84,7 @@ ai-env list [--verbose]
 Remove an environment and release its ports.
 
 ```bash
-ai-env delete <name> [--force] [--delete-branch] [--verbose]
+grove delete <name> [--force] [--delete-branch] [--verbose]
 ```
 
 ### status
@@ -92,12 +92,12 @@ ai-env delete <name> [--force] [--delete-branch] [--verbose]
 Show project summary and port usage.
 
 ```bash
-ai-env status [--verbose]
+grove status [--verbose]
 ```
 
 ## Configuration
 
-### Project Config (`.ai-env.json`)
+### Project Config (`.grove.json`)
 
 Create this file in your project root:
 
@@ -146,7 +146,7 @@ Create this file in your project root:
 
 Default container ports: HTTP/API → 3000, DB/POSTGRES → 5432, REDIS → 6379, etc.
 
-### Global Config (`~/.config/ai-env-manager/config.json`)
+### Global Config (`~/.config/grove/config.json`)
 
 ```json
 {
@@ -192,9 +192,9 @@ Result: Port 30001 maps to container port 80, no git changes.
 
 | File | Location |
 |------|----------|
-| Global config | `~/.config/ai-env-manager/config.json` |
-| Port registry | `~/.local/state/ai-env-manager/ports.json` |
-| Docker overrides | `~/.local/state/ai-env-manager/overrides/<hash>/<env>/` |
+| Global config | `~/.config/grove/config.json` |
+| Port registry | `~/.local/state/grove/ports.json` |
+| Docker overrides | `~/.local/state/grove/overrides/<hash>/<env>/` |
 
 ## Examples
 
@@ -202,7 +202,7 @@ Result: Port 30001 maps to container port 80, no git changes.
 
 ```bash
 # Project has .env.example with HTTP_PORT=3000
-ai-env create feature-login
+grove create feature-login
 
 # Output:
 # Creating worktree...
@@ -215,12 +215,12 @@ ai-env create feature-login
 # Environment "feature-login" created successfully!
 #
 # To activate:
-#   eval "$(ai-env activate feature-login)"
+#   eval "$(grove activate feature-login)"
 ```
 
 ### Project with Docker Compose
 
-`.ai-env.json`:
+`.grove.json`:
 ```json
 {
   "portMapping": {
@@ -231,11 +231,11 @@ ai-env create feature-login
 ```
 
 ```bash
-ai-env create feature-api
+grove create feature-api
 
 # Also outputs:
 # Configuring Docker Compose...
-#   Override: ~/.local/state/ai-env-manager/overrides/.../docker-compose.override.yml
+#   Override: ~/.local/state/grove/overrides/.../docker-compose.override.yml
 #   COMPOSE_FILE set in .env
 ```
 
@@ -244,11 +244,11 @@ In the worktree, `docker compose up` uses the allocated ports automatically.
 ### Multiple Environments
 
 ```bash
-ai-env create agent-1
-ai-env create agent-2
-ai-env create agent-3
+grove create agent-1
+grove create agent-2
+grove create agent-3
 
-ai-env list
+grove list
 # Environments (3):
 #
 #   NAME      PATH                                    PORTS
@@ -266,7 +266,7 @@ Run the command from within a git repository.
 
 ### Environment not found
 
-Check available environments with `ai-env list`.
+Check available environments with `grove list`.
 
 ### Docker Compose shows two port mappings
 
@@ -279,7 +279,7 @@ ports:
 
 ### Port conflict
 
-Ports are allocated globally across all projects. If you're running low on ports, check usage with `ai-env status` and delete unused environments.
+Ports are allocated globally across all projects. If you're running low on ports, check usage with `grove status` and delete unused environments.
 
 ### Worktree already exists
 

@@ -31,7 +31,7 @@ export const statusCommand = defineCommand({
 
     const config = loadProjectConfig(projectRoot);
     const projectName = basename(projectRoot);
-    const configPath = join(projectRoot, ".ai-env.json");
+    const configPath = join(projectRoot, ".grove.json");
 
     if (verbose) {
       console.log(`[verbose] Project root: ${projectRoot}`);

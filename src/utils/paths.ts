@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-const APP_NAME = "ai-env-manager";
+const APP_NAME = "grove";
 
 export function getConfigDir(): string {
   const xdgConfig = process.env.XDG_CONFIG_HOME;

@@ -167,6 +167,6 @@ export const createCommand = defineCommand({
     console.log(`Environment "${envName}" created successfully!`);
     console.log("");
     console.log("To activate:");
-    console.log(`  eval "$(ai-env activate ${envName})"`);
+    console.log(`  eval "$(grove activate ${envName})"`);
   },
 });

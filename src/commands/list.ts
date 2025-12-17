@@ -47,7 +47,7 @@ export const listCommand = defineCommand({
       console.log("No environments found.");
       console.log("");
       console.log("Create one with:");
-      console.log("  ai-env create <name>");
+      console.log("  grove create <name>");
       return;
     }
 

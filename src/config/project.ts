@@ -29,7 +29,7 @@ function getDefaultWorktreeDir(projectRoot: string): string {
 
 export function loadProjectConfig(projectRoot: string): ProjectConfig {
   const global = loadGlobalConfig();
-  const configPath = join(projectRoot, ".ai-env.json");
+  const configPath = join(projectRoot, ".grove.json");
 
   const defaults: ProjectConfig = {
     worktreeDir: getDefaultWorktreeDir(projectRoot),

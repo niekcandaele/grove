@@ -1,10 +1,10 @@
 {
-  "name": "ai-env-manager",
+  "name": "grove",
   "version": "0.1.0",
   "description": "CLI tool for managing git worktrees with automatic port allocation for AI coding agents",
   "type": "module",
   "bin": {
-    "ai-env": "./dist/index.js"
+    "grove": "./dist/index.js"
   },
   "scripts": {
     "build": "tsup",

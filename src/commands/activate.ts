@@ -5,7 +5,7 @@ import { getWorktreeByName } from "../services/git.js";
 export const activateCommand = defineCommand({
   meta: {
     name: "activate",
-    description: "CD into worktree (use: eval \"$(ai-env activate <name>)\")",
+    description: "CD into worktree (use: eval \"$(grove activate <name>)\")",
   },
   args: {
     name: {
@@ -30,10 +30,10 @@ export const activateCommand = defineCommand({
       console.error(`Error: Environment "${envName}" not found`);
       console.error("");
       console.error("Available environments:");
-      console.error("  Run 'ai-env list' to see all environments");
+      console.error("  Run 'grove list' to see all environments");
       console.error("");
       console.error("To create a new environment:");
-      console.error(`  ai-env create ${envName}`);
+      console.error(`  grove create ${envName}`);
       process.exit(1);
     }
 

@@ -72,7 +72,7 @@ export const deleteCommand = defineCommand({
     if (!worktree) {
       console.error(`Error: Environment "${envName}" not found`);
       console.error("");
-      console.error("Run 'ai-env list' to see available environments");
+      console.error("Run 'grove list' to see available environments");
       process.exit(1);
     }
 
