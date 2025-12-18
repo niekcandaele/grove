@@ -21,6 +21,8 @@ import {
   generateDockerOverride,
   getProjectHash,
   hasDockerCompose,
+  getComposeFilePath,
+  detectHardcodedComposePorts,
 } from "./env.js";
 
 // Pure function tests
@@ -440,5 +442,173 @@ describe("hasDockerCompose", () => {
 
   it("returns false when no compose file exists", () => {
     expect(hasDockerCompose(tempDir)).toBe(false);
+  });
+});
+
+describe("getComposeFilePath", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "ai-env-compose-path-test-"));
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("returns path for docker-compose.yml", () => {
+    writeFileSync(join(tempDir, "docker-compose.yml"), "services: {}");
+    expect(getComposeFilePath(tempDir)).toBe(join(tempDir, "docker-compose.yml"));
+  });
+
+  it("returns path for docker-compose.yaml", () => {
+    writeFileSync(join(tempDir, "docker-compose.yaml"), "services: {}");
+    expect(getComposeFilePath(tempDir)).toBe(join(tempDir, "docker-compose.yaml"));
+  });
+
+  it("returns path for compose.yml", () => {
+    writeFileSync(join(tempDir, "compose.yml"), "services: {}");
+    expect(getComposeFilePath(tempDir)).toBe(join(tempDir, "compose.yml"));
+  });
+
+  it("returns path for compose.yaml", () => {
+    writeFileSync(join(tempDir, "compose.yaml"), "services: {}");
+    expect(getComposeFilePath(tempDir)).toBe(join(tempDir, "compose.yaml"));
+  });
+
+  it("returns null when no compose file exists", () => {
+    expect(getComposeFilePath(tempDir)).toBe(null);
+  });
+
+  it("prefers docker-compose.yml over other names", () => {
+    writeFileSync(join(tempDir, "docker-compose.yml"), "services: {}");
+    writeFileSync(join(tempDir, "compose.yml"), "services: {}");
+    expect(getComposeFilePath(tempDir)).toBe(join(tempDir, "docker-compose.yml"));
+  });
+});
+
+describe("detectHardcodedComposePorts", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "ai-env-hardcoded-test-"));
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("detects hardcoded ports", () => {
+    const composePath = join(tempDir, "docker-compose.yml");
+    writeFileSync(composePath, `
+services:
+  web:
+    ports:
+      - "3000:3000"
+`);
+
+    const result = detectHardcodedComposePorts(composePath);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].service).toBe("web");
+    expect(result[0].ports).toContain("3000:3000");
+  });
+
+  it("ignores ports with variable interpolation", () => {
+    const composePath = join(tempDir, "docker-compose.yml");
+    writeFileSync(composePath, `
+services:
+  web:
+    ports:
+      - "\${HTTP_PORT:-3000}:3000"
+`);
+
+    const result = detectHardcodedComposePorts(composePath);
+
+    expect(result).toHaveLength(0);
+  });
+
+  it("returns multiple services with hardcoded ports", () => {
+    const composePath = join(tempDir, "docker-compose.yml");
+    writeFileSync(composePath, `
+services:
+  web:
+    ports:
+      - "3000:3000"
+  db:
+    ports:
+      - "5432:5432"
+`);
+
+    const result = detectHardcodedComposePorts(composePath);
+
+    expect(result).toHaveLength(2);
+    expect(result.find(r => r.service === "web")).toBeDefined();
+    expect(result.find(r => r.service === "db")).toBeDefined();
+  });
+
+  it("returns empty array when no services have ports", () => {
+    const composePath = join(tempDir, "docker-compose.yml");
+    writeFileSync(composePath, `
+services:
+  web:
+    image: nginx
+`);
+
+    const result = detectHardcodedComposePorts(composePath);
+
+    expect(result).toHaveLength(0);
+  });
+
+  it("returns empty array when all ports use variables", () => {
+    const composePath = join(tempDir, "docker-compose.yml");
+    writeFileSync(composePath, `
+services:
+  web:
+    ports:
+      - "\${HTTP_PORT}:3000"
+  db:
+    ports:
+      - "\${DB_PORT:-5432}:5432"
+`);
+
+    const result = detectHardcodedComposePorts(composePath);
+
+    expect(result).toHaveLength(0);
+  });
+
+  it("handles mixed hardcoded and variable ports in same service", () => {
+    const composePath = join(tempDir, "docker-compose.yml");
+    writeFileSync(composePath, `
+services:
+  web:
+    ports:
+      - "3000:3000"
+      - "\${HTTPS_PORT}:443"
+`);
+
+    const result = detectHardcodedComposePorts(composePath);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].service).toBe("web");
+    expect(result[0].ports).toEqual(["3000:3000"]);
+  });
+
+  it("handles empty services object", () => {
+    const composePath = join(tempDir, "docker-compose.yml");
+    writeFileSync(composePath, "services: {}");
+
+    const result = detectHardcodedComposePorts(composePath);
+
+    expect(result).toHaveLength(0);
+  });
+
+  it("returns empty array for malformed YAML", () => {
+    const composePath = join(tempDir, "docker-compose.yml");
+    writeFileSync(composePath, "services:\n  web:\n    ports: [invalid yaml");
+
+    const result = detectHardcodedComposePorts(composePath);
+
+    expect(result).toHaveLength(0);
   });
 });
