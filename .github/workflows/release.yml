@@ -1,0 +1,106 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run tests
+        run: bun test
+
+      - name: Build binaries
+        run: bun run build:all-binaries
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries
+          path: |
+            dist/grove-linux-x64
+            dist/grove-linux-arm64
+            dist/grove-darwin-x64
+            dist/grove-darwin-arm64
+            dist/grove-windows-x64.exe
+
+  release-next:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: binaries
+          path: dist/
+
+      - name: Delete existing next release
+        run: gh release delete next --yes || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Delete existing next tag
+        run: git push origin :refs/tags/next || true
+
+      - name: Create next release
+        run: |
+          gh release create next \
+            --title "Development Build (next)" \
+            --notes "Latest build from main branch. **Not recommended for production.**
+
+          Commit: ${{ github.sha }}
+          Date: $(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --prerelease \
+            dist/grove-linux-x64 \
+            dist/grove-linux-arm64 \
+            dist/grove-darwin-x64 \
+            dist/grove-darwin-arm64 \
+            dist/grove-windows-x64.exe
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release-stable:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: binaries
+          path: dist/
+
+      - name: Create release
+        run: |
+          gh release create ${{ github.ref_name }} \
+            --title "${{ github.ref_name }}" \
+            --generate-notes \
+            dist/grove-linux-x64 \
+            dist/grove-linux-arm64 \
+            dist/grove-darwin-x64 \
+            dist/grove-darwin-arm64 \
+            dist/grove-windows-x64.exe
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
