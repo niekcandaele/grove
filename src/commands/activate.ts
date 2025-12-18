@@ -3,6 +3,7 @@ import { findProjectRoot } from "../config/project.js";
 import { getWorktreeByName } from "../services/git.js";
 import {
   isInsideZellij,
+  isZellijAvailable,
   deriveSessionName,
   generateGoToTabCommand,
   generateAttachCommand,
@@ -49,13 +50,16 @@ export const activateCommand = defineCommand({
       // Inside Zellij: switch to tab (create if missing), then cd
       console.log(generateGoToTabCommand(envName));
       console.log(`cd ${shellEscape(worktree.path)}`);
-    } else {
-      // Outside Zellij: attach to session
+    } else if (isZellijAvailable()) {
+      // Outside Zellij but zellij is installed: attach to session
       const sessionName = deriveSessionName(projectRoot);
       console.log(generateAttachCommand(sessionName));
       console.error(
         `# After attaching, run: eval "$(grove activate ${envName})"`
       );
+    } else {
+      // Zellij not available: just cd
+      console.log(`cd ${shellEscape(worktree.path)}`);
     }
   },
 });

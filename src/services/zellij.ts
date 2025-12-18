@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { basename } from "node:path";
 import { shellEscape } from "../utils/shell.js";
 
@@ -6,6 +7,18 @@ import { shellEscape } from "../utils/shell.js";
  */
 export function isInsideZellij(): boolean {
   return process.env.ZELLIJ !== undefined;
+}
+
+/**
+ * Check if zellij command is available on the system
+ */
+export function isZellijAvailable(): boolean {
+  try {
+    execSync("which zellij", { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
