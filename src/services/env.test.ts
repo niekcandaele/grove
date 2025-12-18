@@ -602,4 +602,13 @@ services:
 
     expect(result).toHaveLength(0);
   });
+
+  it("returns empty array for malformed YAML", () => {
+    const composePath = join(tempDir, "docker-compose.yml");
+    writeFileSync(composePath, "services:\n  web:\n    ports: [invalid yaml");
+
+    const result = detectHardcodedComposePorts(composePath);
+
+    expect(result).toHaveLength(0);
+  });
 });

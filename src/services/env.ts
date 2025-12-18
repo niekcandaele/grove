@@ -381,44 +381,49 @@ export function getComposeFilePath(dir: string): string | null {
  * Detect hardcoded ports in docker-compose.yml that don't use variable interpolation
  */
 export function detectHardcodedComposePorts(composePath: string): HardcodedPort[] {
-  const content = readFileSync(composePath, "utf-8");
-  const doc = yaml.load(content) as Record<string, unknown> | null;
+  try {
+    const content = readFileSync(composePath, "utf-8");
+    const doc = yaml.load(content) as Record<string, unknown> | null;
 
-  if (!doc || typeof doc !== "object") {
-    return [];
-  }
-
-  const services = doc.services as Record<string, unknown> | undefined;
-  if (!services || typeof services !== "object") {
-    return [];
-  }
-
-  const results: HardcodedPort[] = [];
-
-  for (const [serviceName, serviceConfig] of Object.entries(services)) {
-    if (!serviceConfig || typeof serviceConfig !== "object") {
-      continue;
+    if (!doc || typeof doc !== "object") {
+      return [];
     }
 
-    const ports = (serviceConfig as Record<string, unknown>).ports;
-    if (!Array.isArray(ports)) {
-      continue;
+    const services = doc.services as Record<string, unknown> | undefined;
+    if (!services || typeof services !== "object") {
+      return [];
     }
 
-    const hardcoded: string[] = [];
+    const results: HardcodedPort[] = [];
 
-    for (const port of ports) {
-      const portStr = String(port);
-      // A port is hardcoded if it doesn't contain ${
-      if (!portStr.includes("${")) {
-        hardcoded.push(portStr);
+    for (const [serviceName, serviceConfig] of Object.entries(services)) {
+      if (!serviceConfig || typeof serviceConfig !== "object") {
+        continue;
+      }
+
+      const ports = (serviceConfig as Record<string, unknown>).ports;
+      if (!Array.isArray(ports)) {
+        continue;
+      }
+
+      const hardcoded: string[] = [];
+
+      for (const port of ports) {
+        const portStr = String(port);
+        // A port is hardcoded if it doesn't contain ${
+        if (!portStr.includes("${")) {
+          hardcoded.push(portStr);
+        }
+      }
+
+      if (hardcoded.length > 0) {
+        results.push({ service: serviceName, ports: hardcoded });
       }
     }
 
-    if (hardcoded.length > 0) {
-      results.push({ service: serviceName, ports: hardcoded });
-    }
+    return results;
+  } catch {
+    // YAML parse error or file read error — return empty to avoid crashing
+    return [];
   }
-
-  return results;
 }
