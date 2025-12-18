@@ -1,6 +1,12 @@
 import { defineCommand } from "citty";
 import { findProjectRoot } from "../config/project.js";
 import { getWorktreeByName } from "../services/git.js";
+import {
+  isInsideZellij,
+  deriveSessionName,
+  generateGoToTabCommand,
+  generateAttachCommand,
+} from "../services/zellij.js";
 
 export const activateCommand = defineCommand({
   meta: {
@@ -37,8 +43,18 @@ export const activateCommand = defineCommand({
       process.exit(1);
     }
 
-    // Output cd command for shell eval
-    // Quote the path to handle spaces
-    console.log(`cd "${worktree.path}"`);
+    // Output shell commands for eval
+    if (isInsideZellij()) {
+      // Inside Zellij: switch to tab (create if missing), then cd
+      console.log(generateGoToTabCommand(envName));
+      console.log(`cd "${worktree.path}"`);
+    } else {
+      // Outside Zellij: attach to session
+      const sessionName = deriveSessionName(projectRoot);
+      console.log(generateAttachCommand(sessionName));
+      console.error(
+        `# After attaching, run: eval "$(grove activate ${envName})"`
+      );
+    }
   },
 });
