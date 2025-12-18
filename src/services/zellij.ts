@@ -1,4 +1,5 @@
 import { basename } from "node:path";
+import { shellEscape } from "../utils/shell.js";
 
 /**
  * Check if we're running inside a Zellij session
@@ -20,7 +21,7 @@ export function deriveSessionName(projectRoot: string): string {
  * Only works when called from inside a Zellij session.
  */
 export function generateNewTabCommand(tabName: string, cwd: string): string {
-  return `zellij action new-tab --name "${tabName}" --cwd "${cwd}"`;
+  return `zellij action new-tab --name ${shellEscape(tabName)} --cwd ${shellEscape(cwd)}`;
 }
 
 /**
@@ -28,7 +29,7 @@ export function generateNewTabCommand(tabName: string, cwd: string): string {
  * Only works when called from inside a Zellij session.
  */
 export function generateGoToTabCommand(tabName: string): string {
-  return `zellij action go-to-tab-name "${tabName}" --create`;
+  return `zellij action go-to-tab-name ${shellEscape(tabName)} --create`;
 }
 
 /**
@@ -36,5 +37,5 @@ export function generateGoToTabCommand(tabName: string): string {
  * Used when running outside Zellij.
  */
 export function generateAttachCommand(sessionName: string): string {
-  return `zellij attach "${sessionName}" --create`;
+  return `zellij attach ${shellEscape(sessionName)} --create`;
 }

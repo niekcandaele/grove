@@ -7,6 +7,7 @@ import {
   generateGoToTabCommand,
   generateAttachCommand,
 } from "../services/zellij.js";
+import { shellEscape } from "../utils/shell.js";
 
 export const activateCommand = defineCommand({
   meta: {
@@ -47,7 +48,7 @@ export const activateCommand = defineCommand({
     if (isInsideZellij()) {
       // Inside Zellij: switch to tab (create if missing), then cd
       console.log(generateGoToTabCommand(envName));
-      console.log(`cd "${worktree.path}"`);
+      console.log(`cd ${shellEscape(worktree.path)}`);
     } else {
       // Outside Zellij: attach to session
       const sessionName = deriveSessionName(projectRoot);
