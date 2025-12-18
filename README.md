@@ -14,19 +14,22 @@ This tool solves all three.
 
 ## Installation
 
-**Requirements:**
-- Node.js 20+
-- Git
-- Docker Compose 2.24.4+ (optional, for Docker integration)
+### Standalone Binary
+
+Download from [releases](https://github.com/niekcandaele/grove/releases) and add to your PATH:
 
 ```bash
-# Run directly with npx
-npx grove create my-feature
-
-# Or install globally
-npm install -g grove
-grove create my-feature
+curl -LO https://github.com/niekcandaele/grove/releases/latest/download/grove-linux-x64
+chmod +x grove-linux-x64
+sudo mv grove-linux-x64 /usr/local/bin/grove
 ```
+
+Binaries available for Linux, macOS, and Windows (x64 and arm64).
+
+### Requirements
+
+- Git
+- Docker Compose 2.24.4+ (optional)
 
 ## Quick Start
 
