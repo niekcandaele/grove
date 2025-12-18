@@ -9,8 +9,29 @@ export interface WorktreeInfo {
   bare: boolean;
 }
 
+export type CreateWorktreeResult =
+  | { success: true; path: string; branch: string }
+  | { success: false; existingWorktreePath: string };
+
 function exec(command: string, cwd: string): string {
   return execSync(command, { cwd, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+}
+
+/**
+ * Parse git error for "already checked out" message.
+ * Returns the existing worktree path if found, null otherwise.
+ */
+export function parseAlreadyCheckedOutError(stderr: string): string | null {
+  // Pattern: fatal: 'branchname' is already checked out at '/path/to/worktree'
+  const match = stderr.match(/is already checked out at '([^']+)'/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Prune stale worktree references.
+ */
+export function pruneWorktrees(cwd: string): void {
+  exec("git worktree prune", cwd);
 }
 
 export function getMainWorktreePath(cwd: string = process.cwd()): string {
@@ -40,22 +61,31 @@ export function createWorktree(
   baseBranch: string,
   worktreeDir: string,
   projectRoot: string
-): { path: string; branch: string } {
+): CreateWorktreeResult {
   const worktreePath = resolve(projectRoot, worktreeDir, name);
 
   if (existsSync(worktreePath)) {
     throw new Error(`Worktree path already exists: ${worktreePath}`);
   }
 
-  if (branchExists(name, projectRoot)) {
-    // Branch exists, create worktree from existing branch
-    exec(`git worktree add "${worktreePath}" "${name}"`, projectRoot);
-  } else {
-    // Create new branch and worktree
-    exec(`git worktree add -b "${name}" "${worktreePath}" "${baseBranch}"`, projectRoot);
+  try {
+    if (branchExists(name, projectRoot)) {
+      // Branch exists, create worktree from existing branch
+      exec(`git worktree add "${worktreePath}" "${name}"`, projectRoot);
+    } else {
+      // Create new branch and worktree
+      exec(`git worktree add -b "${name}" "${worktreePath}" "${baseBranch}"`, projectRoot);
+    }
+  } catch (err) {
+    const stderr = err instanceof Error ? err.message : String(err);
+    const existingPath = parseAlreadyCheckedOutError(stderr);
+    if (existingPath) {
+      return { success: false, existingWorktreePath: existingPath };
+    }
+    throw err;
   }
 
-  return { path: worktreePath, branch: name };
+  return { success: true, path: worktreePath, branch: name };
 }
 
 export function listWorktrees(projectRoot: string): WorktreeInfo[] {

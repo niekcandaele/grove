@@ -1,8 +1,10 @@
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { defineCommand } from "citty";
 import { sanitizeName } from "../utils/naming.js";
 import { getPortRegistryPath } from "../utils/paths.js";
 import { loadProjectConfig, findProjectRoot } from "../config/project.js";
-import { createWorktree, getMainWorktreePath } from "../services/git.js";
+import { createWorktree, getMainWorktreePath, pruneWorktrees, getWorktreeByName } from "../services/git.js";
 import {
   copyEnvFile,
   configureEnvFile,
@@ -107,16 +109,63 @@ export const createCommand = defineCommand({
       console.log(`[verbose] Port registry: ${getPortRegistryPath()}`);
     }
 
+    // Check if environment already exists in this project
+    const existingWorktree = getWorktreeByName(envName, projectRoot);
+    if (existingWorktree) {
+      console.error(`Environment "${envName}" already exists. Activating...`);
+      console.log(`cd "${existingWorktree.path}"`);
+      process.exit(0);
+    }
+
     // Create worktree
     console.log(`Creating worktree...`);
     let worktreePath: string;
     try {
-      const result = createWorktree(
+      let result = createWorktree(
         envName,
         config.baseBranch,
         config.worktreeDir,
         projectRoot
       );
+
+      // Handle "already checked out" scenario
+      if (!result.success) {
+        const existingPath = result.existingWorktreePath;
+        const expectedWorktreeBase = resolve(projectRoot, config.worktreeDir);
+
+        if (existsSync(existingPath)) {
+          // Path exists - check if it's in the same project
+          if (existingPath.startsWith(expectedWorktreeBase)) {
+            // Same project - auto-activate
+            console.error(`Environment "${envName}" already exists. Activating...`);
+            console.log(`cd "${existingPath}"`);
+            process.exit(0);
+          } else {
+            // Different project - inform user
+            console.error(`Branch "${envName}" is already checked out in a different project:`);
+            console.error(`  ${existingPath}`);
+            console.error("");
+            console.error("To work there:");
+            console.error(`  cd ${existingPath}`);
+            process.exit(1);
+          }
+        } else {
+          // Path doesn't exist - prune stale reference and retry
+          console.error("Cleaning up stale worktree reference...");
+          pruneWorktrees(projectRoot);
+          result = createWorktree(
+            envName,
+            config.baseBranch,
+            config.worktreeDir,
+            projectRoot
+          );
+          if (!result.success) {
+            console.error(`Error: Branch "${envName}" is still checked out elsewhere`);
+            process.exit(1);
+          }
+        }
+      }
+
       worktreePath = result.path;
       console.log(`  Branch: ${result.branch}`);
       console.log(`  Path: ${worktreePath}`);
