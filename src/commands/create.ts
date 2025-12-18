@@ -11,8 +11,41 @@ import {
   generateDockerOverride,
   writeDockerOverride,
   setComposeFilePath,
+  getComposeFilePath,
+  detectHardcodedComposePorts,
+  type HardcodedPort,
 } from "../services/env.js";
 import { allocatePorts } from "../services/ports.js";
+
+function printHardcodedPortsWarning(hardcoded: HardcodedPort[], projectRoot: string): void {
+  console.log("");
+  console.log("⚠️  Warning: Found hardcoded ports in docker-compose.yml");
+  console.log("");
+  console.log("These services have ports that won't be managed by grove:");
+  for (const { service, ports } of hardcoded) {
+    console.log(`  - ${service}: ${ports.join(", ")}`);
+  }
+  console.log("");
+  console.log("To fix this, add port variables to .env.example and update docker-compose.yml.");
+  console.log("");
+  console.log("Copy this prompt to an AI assistant to fix it automatically:");
+  console.log("");
+  console.log("─".repeat(60));
+  console.log(`Update this project to use environment variables for Docker Compose ports.
+
+Hardcoded ports found:`);
+  for (const { service, ports } of hardcoded) {
+    console.log(`- Service "${service}": ${ports.join(", ")}`);
+  }
+  console.log(`
+For each hardcoded port:
+1. Add a variable to .env.example (e.g., WEB_PORT=3000)
+2. Update docker-compose.yml to use the variable: \${WEB_PORT:-3000}:3000
+3. Add portMapping to .grove.json for grove's Docker integration
+
+Project root: ${projectRoot}`);
+  console.log("─".repeat(60));
+}
 
 export const createCommand = defineCommand({
   meta: {
@@ -159,6 +192,17 @@ export const createCommand = defineCommand({
         setComposeFilePath(worktreePath, overridePath);
         console.log(`  Override: ${overridePath}`);
         console.log(`  COMPOSE_FILE set in .env`);
+      }
+    }
+
+    // Check for hardcoded ports in compose file
+    if (hasCompose) {
+      const composePath = getComposeFilePath(worktreePath);
+      if (composePath) {
+        const hardcodedPorts = detectHardcodedComposePorts(composePath);
+        if (hardcodedPorts.length > 0) {
+          printHardcodedPortsWarning(hardcodedPorts, projectRoot);
+        }
       }
     }
 

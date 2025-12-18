@@ -1,8 +1,14 @@
 import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
+import yaml from "js-yaml";
 import { getOverridesDir } from "../utils/paths.js";
 import type { PortMappingEntry } from "../config/project.js";
+
+export interface HardcodedPort {
+  service: string;
+  ports: string[];
+}
 
 export interface EnvVar {
   name: string;
@@ -348,4 +354,71 @@ export function removeDockerOverride(projectRoot: string, envName: string): bool
   }
 
   return false;
+}
+
+/**
+ * Get the path to the docker-compose file in a directory
+ */
+export function getComposeFilePath(dir: string): string | null {
+  const candidates = [
+    "docker-compose.yml",
+    "docker-compose.yaml",
+    "compose.yml",
+    "compose.yaml",
+  ];
+
+  for (const name of candidates) {
+    const path = join(dir, name);
+    if (existsSync(path)) {
+      return path;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Detect hardcoded ports in docker-compose.yml that don't use variable interpolation
+ */
+export function detectHardcodedComposePorts(composePath: string): HardcodedPort[] {
+  const content = readFileSync(composePath, "utf-8");
+  const doc = yaml.load(content) as Record<string, unknown> | null;
+
+  if (!doc || typeof doc !== "object") {
+    return [];
+  }
+
+  const services = doc.services as Record<string, unknown> | undefined;
+  if (!services || typeof services !== "object") {
+    return [];
+  }
+
+  const results: HardcodedPort[] = [];
+
+  for (const [serviceName, serviceConfig] of Object.entries(services)) {
+    if (!serviceConfig || typeof serviceConfig !== "object") {
+      continue;
+    }
+
+    const ports = (serviceConfig as Record<string, unknown>).ports;
+    if (!Array.isArray(ports)) {
+      continue;
+    }
+
+    const hardcoded: string[] = [];
+
+    for (const port of ports) {
+      const portStr = String(port);
+      // A port is hardcoded if it doesn't contain ${
+      if (!portStr.includes("${")) {
+        hardcoded.push(portStr);
+      }
+    }
+
+    if (hardcoded.length > 0) {
+      results.push({ service: serviceName, ports: hardcoded });
+    }
+  }
+
+  return results;
 }
