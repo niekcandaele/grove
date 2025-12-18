@@ -191,6 +191,20 @@ Result: Port 30001 maps to container port 80, no git changes.
 - Docker Compose 2.24.4+ (for `!override` tag support)
 - For older versions, use env variables in your compose file: `${HTTP_PORT:-8080}:80`
 
+## Zellij Integration
+
+Grove automatically integrates with [Zellij](https://zellij.dev/) when running inside a Zellij session. Each worktree gets its own tab.
+
+**Inside a Zellij session:**
+- `grove create <name>` creates the worktree and opens a new tab
+- `grove activate <name>` switches to the worktree's tab
+
+**Outside a Zellij session:**
+- `grove activate <name>` attaches to (or creates) the project's Zellij session
+- Run `grove activate` again once inside to switch to the tab
+
+Session names are derived from the project directory (e.g., `my-app` for `/home/user/code/my-app`).
+
 ## File Locations
 
 | File | Location |
