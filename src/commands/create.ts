@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { defineCommand } from "citty";
@@ -18,6 +19,7 @@ import {
   type HardcodedPort,
 } from "../services/env.js";
 import { allocatePorts } from "../services/ports.js";
+import { isInsideZellij, generateNewTabCommand } from "../services/zellij.js";
 
 function printHardcodedPortsWarning(hardcoded: HardcodedPort[], projectRoot: string): void {
   console.log("");
@@ -252,6 +254,19 @@ export const createCommand = defineCommand({
         if (hardcodedPorts.length > 0) {
           printHardcodedPortsWarning(hardcodedPorts, projectRoot);
         }
+      }
+    }
+
+    // Zellij integration - create tab when inside session
+    if (isInsideZellij()) {
+      console.log("Creating Zellij tab...");
+      try {
+        execSync(generateNewTabCommand(envName, worktreePath), {
+          stdio: "inherit",
+        });
+        console.log(`  Tab "${envName}" created`);
+      } catch {
+        console.warn("  Warning: Could not create Zellij tab");
       }
     }
 
