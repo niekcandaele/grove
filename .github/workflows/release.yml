@@ -3,7 +3,7 @@ name: Build & Release
 on:
   push:
     branches: [main]
-    tags: ['v*']
+    tags: ['*']
   pull_request:
     branches: [main]
 
@@ -106,7 +106,7 @@ jobs:
 
   release-stable:
     needs: [build, e2e]
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/') && github.ref != 'refs/tags/next'
     runs-on: ubuntu-latest
     permissions:
       contents: write
