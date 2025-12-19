@@ -1,24 +1,10 @@
 import { defineCommand } from "citty";
-import { createInterface } from "node:readline";
 import { findProjectRoot } from "../config/project.js";
 import { getPortRegistryPath, getOverridesDir } from "../utils/paths.js";
 import { getWorktreeByName, removeWorktree } from "../services/git.js";
 import { releasePorts, getPortsForEnvironment } from "../services/ports.js";
 import { removeDockerOverride, getOverridePath } from "../services/env.js";
-
-async function confirm(message: string): Promise<boolean> {
-  const rl = createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-
-  return new Promise((resolve) => {
-    rl.question(`${message} [y/N] `, (answer) => {
-      rl.close();
-      resolve(answer.toLowerCase() === "y");
-    });
-  });
-}
+import { confirm } from "../utils/prompt.js";
 
 export const deleteCommand = defineCommand({
   meta: {
