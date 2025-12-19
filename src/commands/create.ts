@@ -20,6 +20,7 @@ import {
 } from "../services/env.js";
 import { allocatePorts } from "../services/ports.js";
 import { isInsideZellij, generateNewTabCommand } from "../services/zellij.js";
+import { confirm, isInteractive } from "../utils/prompt.js";
 
 function printHardcodedPortsWarning(hardcoded: HardcodedPort[], projectRoot: string): void {
   console.log("");
@@ -68,10 +69,17 @@ export const createCommand = defineCommand({
       description: "Show detailed output",
       default: false,
     },
+    force: {
+      type: "boolean",
+      alias: "f",
+      description: "Skip confirmation prompt for hardcoded ports",
+      default: false,
+    },
   },
   async run({ args }) {
     const rawName = args.name as string;
     const verbose = args.verbose as boolean;
+    const force = args.force as boolean;
 
     // Find project root
     const projectRoot = findProjectRoot();
@@ -117,6 +125,33 @@ export const createCommand = defineCommand({
       console.error(`Environment "${envName}" already exists. Activating...`);
       console.log(`cd "${existingWorktree.path}"`);
       process.exit(0);
+    }
+
+    // Check for hardcoded ports BEFORE creating worktree
+    const mainWorktreePath = getMainWorktreePath(projectRoot);
+    const hasComposeInMain = hasDockerCompose(mainWorktreePath);
+
+    if (hasComposeInMain && !force) {
+      const composePath = getComposeFilePath(mainWorktreePath);
+      if (composePath) {
+        const hardcodedPorts = detectHardcodedComposePorts(composePath);
+        if (hardcodedPorts.length > 0) {
+          printHardcodedPortsWarning(hardcodedPorts, projectRoot);
+
+          if (!isInteractive()) {
+            console.log("");
+            console.log("Run with --force to skip this prompt in non-interactive mode.");
+            process.exit(1);
+          }
+
+          const confirmed = await confirm("Continue creating worktree?");
+          if (!confirmed) {
+            console.log("Cancelled");
+            process.exit(0);
+          }
+          console.log("");
+        }
+      }
     }
 
     // Create worktree
@@ -176,9 +211,6 @@ export const createCommand = defineCommand({
       console.error(`Error creating worktree: ${message}`);
       process.exit(1);
     }
-
-    // Get main worktree path for .env copying
-    const mainWorktreePath = getMainWorktreePath(projectRoot);
 
     if (verbose) {
       console.log(`[verbose] Main worktree: ${mainWorktreePath}`);
@@ -243,17 +275,6 @@ export const createCommand = defineCommand({
         setComposeFilePath(worktreePath, overridePath);
         console.log(`  Override: ${overridePath}`);
         console.log(`  COMPOSE_FILE set in .env`);
-      }
-    }
-
-    // Check for hardcoded ports in compose file
-    if (hasCompose) {
-      const composePath = getComposeFilePath(worktreePath);
-      if (composePath) {
-        const hardcodedPorts = detectHardcodedComposePorts(composePath);
-        if (hardcodedPorts.length > 0) {
-          printHardcodedPortsWarning(hardcodedPorts, projectRoot);
-        }
       }
     }
 
