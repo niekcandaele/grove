@@ -5,10 +5,13 @@ import { listCommand } from "./commands/list.js";
 import { deleteCommand } from "./commands/delete.js";
 import { statusCommand } from "./commands/status.js";
 
+declare const GROVE_VERSION: string | undefined;
+const version = typeof GROVE_VERSION !== "undefined" ? GROVE_VERSION : "dev";
+
 const main = defineCommand({
   meta: {
     name: "grove",
-    version: "0.1.0",
+    version,
     description:
       "CLI tool for managing git worktrees with automatic port allocation",
   },

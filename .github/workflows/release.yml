@@ -24,7 +24,17 @@ jobs:
         run: bun test
 
       - name: Build binaries
-        run: bun run build:all-binaries
+        run: |
+          VERSION="${{ github.ref_name }}"
+          # For main branch builds or PRs, use "next"
+          if [ "$VERSION" = "main" ] || [ -z "$VERSION" ]; then
+            VERSION="next"
+          fi
+          bun build --compile --minify --target=bun-linux-x64 --define "GROVE_VERSION=\"$VERSION\"" ./src/index.ts --outfile dist/grove-linux-x64
+          bun build --compile --minify --target=bun-linux-arm64 --define "GROVE_VERSION=\"$VERSION\"" ./src/index.ts --outfile dist/grove-linux-arm64
+          bun build --compile --minify --target=bun-darwin-x64 --define "GROVE_VERSION=\"$VERSION\"" ./src/index.ts --outfile dist/grove-darwin-x64
+          bun build --compile --minify --target=bun-darwin-arm64 --define "GROVE_VERSION=\"$VERSION\"" ./src/index.ts --outfile dist/grove-darwin-arm64
+          bun build --compile --minify --target=bun-windows-x64 --define "GROVE_VERSION=\"$VERSION\"" ./src/index.ts --outfile dist/grove-windows-x64.exe
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
