@@ -13,6 +13,7 @@ export interface ProjectConfig {
   portVarPatterns: string[];
   portMapping: Record<string, string | PortMappingEntry>;
   portRange: [number, number];
+  copyFiles: string[];
 }
 
 interface ProjectConfigFile {
@@ -20,6 +21,7 @@ interface ProjectConfigFile {
   baseBranch?: string;
   portVarPatterns?: string[];
   portMapping?: Record<string, string | PortMappingEntry>;
+  copyFiles?: string[];
 }
 
 function getDefaultWorktreeDir(projectRoot: string): string {
@@ -37,6 +39,7 @@ export function loadProjectConfig(projectRoot: string): ProjectConfig {
     portVarPatterns: ["*_PORT"],
     portMapping: {},
     portRange: global.defaultPortRange,
+    copyFiles: [".claude/settings.local.json", ".envrc"],
   };
 
   if (!existsSync(configPath)) {
