@@ -8,6 +8,7 @@ import { loadProjectConfig, findProjectRoot } from "../config/project.js";
 import { createWorktree, getMainWorktreePath, pruneWorktrees, getWorktreeByName } from "../services/git.js";
 import {
   copyEnvFile,
+  copyConfiguredFiles,
   configureEnvFile,
   getPortVariablesFromProject,
   hasDockerCompose,
@@ -223,6 +224,19 @@ export const createCommand = defineCommand({
       if (verbose) {
         console.log(`[verbose]   Source: ${mainWorktreePath}/.env.example or .env`);
         console.log(`[verbose]   Destination: ${worktreePath}/.env`);
+      }
+    }
+
+    // Copy configured files
+    if (config.copyFiles.length > 0) {
+      const copiedFiles = copyConfiguredFiles(worktreePath, mainWorktreePath, config.copyFiles);
+      if (copiedFiles.length > 0) {
+        console.log(`  Copied ${copiedFiles.length} configured file(s)`);
+        if (verbose) {
+          for (const file of copiedFiles) {
+            console.log(`[verbose]   ${file}`);
+          }
+        }
       }
     }
 

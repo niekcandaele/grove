@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { createHash } from "node:crypto";
 import yaml from "js-yaml";
 import { getOverridesDir } from "../utils/paths.js";
@@ -147,6 +147,34 @@ export function copyEnvFile(
   }
 
   return false;
+}
+
+/**
+ * Copy configured files from main worktree to new worktree
+ */
+export function copyConfiguredFiles(
+  worktreePath: string,
+  mainWorktreePath: string,
+  files: string[]
+): string[] {
+  const copied: string[] = [];
+
+  for (const file of files) {
+    const sourcePath = join(mainWorktreePath, file);
+    const destPath = join(worktreePath, file);
+
+    if (!existsSync(sourcePath)) {
+      continue;
+    }
+
+    const destDir = dirname(destPath);
+    mkdirSync(destDir, { recursive: true });
+
+    copyFileSync(sourcePath, destPath);
+    copied.push(file);
+  }
+
+  return copied;
 }
 
 /**
