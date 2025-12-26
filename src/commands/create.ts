@@ -32,22 +32,54 @@ function printHardcodedPortsWarning(hardcoded: HardcodedPort[], projectRoot: str
     console.log(`  - ${service}: ${ports.join(", ")}`);
   }
   console.log("");
-  console.log("To fix this, add port variables to .env.example and update docker-compose.yml.");
-  console.log("");
   console.log("Copy this prompt to an AI assistant to fix it automatically:");
   console.log("");
   console.log("─".repeat(60));
   console.log(`Update this project to use environment variables for Docker Compose ports.
 
-Hardcoded ports found:`);
+## Hardcoded ports found`);
   for (const { service, ports } of hardcoded) {
     console.log(`- Service "${service}": ${ports.join(", ")}`);
   }
   console.log(`
-For each hardcoded port:
-1. Add a variable to .env.example (e.g., WEB_PORT=3000)
-2. Update docker-compose.yml to use the variable: \${WEB_PORT:-3000}:3000
-3. Add portMapping to .grove.json for grove's Docker integration
+## Instructions
+
+For each hardcoded port (format is \`host:container\`):
+
+1. **Add variable to .env.example**
+   - Only the HOST port (left side) needs a variable
+   - Container port (right side) stays fixed
+   - Naming convention: \`SERVICE_PURPOSE_PORT\` (e.g., \`WEB_HTTP_PORT\`, \`POSTGRES_HOST_PORT\`)
+   - Check existing variables in .env.example to avoid conflicts
+
+2. **Update docker-compose.yml**
+   Use the variable with a default: \`\${WEB_HTTP_PORT:-8080}:80\`
+
+3. **Add portMapping to .grove.json**
+   Create or update .grove.json with:
+   \`\`\`json
+   {
+     "portVarPatterns": ["*_PORT"],
+     "portRange": [30000, 39999],
+     "portMapping": {
+       "WEB_HTTP_PORT": { "service": "web", "containerPort": 80 },
+       "DB_PORT": { "service": "postgres", "containerPort": 5432 }
+     }
+   }
+   \`\`\`
+
+## Example transformation
+
+Before (docker-compose.yml):
+\`\`\`yaml
+ports:
+  - "8080:80"
+\`\`\`
+
+After:
+- .env.example: \`WEB_HTTP_PORT=8080\`
+- docker-compose.yml: \`- "\${WEB_HTTP_PORT:-8080}:80"\`
+- .grove.json portMapping: \`"WEB_HTTP_PORT": { "service": "web", "containerPort": 80 }\`
 
 Project root: ${projectRoot}`);
   console.log("─".repeat(60));
