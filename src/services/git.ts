@@ -1,5 +1,5 @@
 import { execSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 export interface WorktreeInfo {
@@ -126,6 +126,44 @@ export function getWorktreeByName(
 
   // Match by branch name
   return worktrees.find((wt) => wt.branch === name) || null;
+}
+
+/**
+ * Find the worktree that contains the given directory.
+ * Returns null if the directory is not inside any worktree.
+ */
+export function getCurrentWorktree(
+  cwd: string,
+  projectRoot: string
+): WorktreeInfo | null {
+  const worktrees = listWorktrees(projectRoot);
+  const normalizedCwd = resolve(cwd);
+
+  // Find the worktree whose path is a prefix of cwd
+  // Sort by path length descending to match the most specific worktree first
+  const sorted = [...worktrees].sort((a, b) => b.path.length - a.path.length);
+
+  for (const wt of sorted) {
+    const normalizedPath = resolve(wt.path);
+    if (normalizedCwd === normalizedPath || normalizedCwd.startsWith(normalizedPath + "/")) {
+      return wt;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Check if a worktree is the main/primary worktree (not a linked worktree).
+ * The main worktree has an actual .git directory, not a .git file.
+ */
+export function isMainWorktree(worktreePath: string): boolean {
+  const gitPath = join(worktreePath, ".git");
+  if (!existsSync(gitPath)) {
+    return false;
+  }
+  // Main worktree has a .git directory, linked worktrees have a .git file
+  return statSync(gitPath).isDirectory();
 }
 
 export function removeWorktree(

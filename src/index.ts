@@ -3,6 +3,7 @@ import { createCommand } from "./commands/create.js";
 import { activateCommand } from "./commands/activate.js";
 import { listCommand } from "./commands/list.js";
 import { deleteCommand } from "./commands/delete.js";
+import { deleteCurrentCommand } from "./commands/delete-current.js";
 import { statusCommand } from "./commands/status.js";
 
 declare const GROVE_VERSION: string | undefined;
@@ -20,6 +21,7 @@ const main = defineCommand({
     activate: activateCommand,
     list: listCommand,
     delete: deleteCommand,
+    "delete-current": deleteCurrentCommand,
     status: statusCommand,
   },
 });
