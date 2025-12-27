@@ -17,7 +17,9 @@ import {
   setComposeFilePath,
   getComposeFilePath,
   detectHardcodedComposePorts,
+  detectHardcodedContainerNames,
   type HardcodedPort,
+  type HardcodedContainerName,
 } from "../services/env.js";
 import { allocatePorts } from "../services/ports.js";
 import { isInsideZellij, generateNewTabCommand } from "../services/zellij.js";
@@ -80,6 +82,52 @@ After:
 - .env.example: \`WEB_HTTP_PORT=8080\`
 - docker-compose.yml: \`- "\${WEB_HTTP_PORT:-8080}:80"\`
 - .grove.json portMapping: \`"WEB_HTTP_PORT": { "service": "web", "containerPort": 80 }\`
+
+Project root: ${projectRoot}`);
+  console.log("─".repeat(60));
+}
+
+function printHardcodedContainerNamesWarning(hardcoded: HardcodedContainerName[], projectRoot: string): void {
+  console.log("");
+  console.log("⚠️  Warning: Found hardcoded container names in docker-compose.yml");
+  console.log("");
+  console.log("These container names will conflict when running multiple environments:");
+  for (const { service, containerName } of hardcoded) {
+    console.log(`  - ${service}: ${containerName}`);
+  }
+  console.log("");
+  console.log("Copy this prompt to an AI assistant to fix it automatically:");
+  console.log("");
+  console.log("─".repeat(60));
+  console.log(`Update this project to remove hardcoded container names from Docker Compose.
+
+## Hardcoded container names found`);
+  for (const { service, containerName } of hardcoded) {
+    console.log(`- Service "${service}": ${containerName}`);
+  }
+  console.log(`
+## Why this is a problem
+
+Hardcoded container names cause conflicts when running multiple environments.
+Docker Compose automatically generates unique names using the project name
+prefix (e.g., \`myproject-prometheus-1\`), which prevents conflicts.
+
+## Instructions
+
+Remove the \`container_name\` field from each service listed above.
+
+Before:
+\`\`\`yaml
+prometheus:
+  image: prom/prometheus
+  container_name: prometheus
+\`\`\`
+
+After:
+\`\`\`yaml
+prometheus:
+  image: prom/prometheus
+\`\`\`
 
 Project root: ${projectRoot}`);
   console.log("─".repeat(60));
@@ -160,7 +208,7 @@ export const createCommand = defineCommand({
       process.exit(0);
     }
 
-    // Check for hardcoded ports BEFORE creating worktree
+    // Check for hardcoded ports and container names BEFORE creating worktree
     const mainWorktreePath = getMainWorktreePath(projectRoot);
     const hasComposeInMain = hasDockerCompose(mainWorktreePath);
 
@@ -168,9 +216,17 @@ export const createCommand = defineCommand({
       const composePath = getComposeFilePath(mainWorktreePath);
       if (composePath) {
         const hardcodedPorts = detectHardcodedComposePorts(composePath);
+        const hardcodedNames = detectHardcodedContainerNames(composePath);
+
         if (hardcodedPorts.length > 0) {
           printHardcodedPortsWarning(hardcodedPorts, projectRoot);
+        }
 
+        if (hardcodedNames.length > 0) {
+          printHardcodedContainerNamesWarning(hardcodedNames, projectRoot);
+        }
+
+        if (hardcodedPorts.length > 0 || hardcodedNames.length > 0) {
           if (!isInteractive()) {
             console.log("");
             console.log("Run with --force to skip this prompt in non-interactive mode.");

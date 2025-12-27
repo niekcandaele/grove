@@ -23,6 +23,7 @@ import {
   hasDockerCompose,
   getComposeFilePath,
   detectHardcodedComposePorts,
+  detectHardcodedContainerNames,
 } from "./env.js";
 
 // Pure function tests
@@ -608,6 +609,117 @@ services:
     writeFileSync(composePath, "services:\n  web:\n    ports: [invalid yaml");
 
     const result = detectHardcodedComposePorts(composePath);
+
+    expect(result).toHaveLength(0);
+  });
+});
+
+describe("detectHardcodedContainerNames", () => {
+  let tempDir: string;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), "grove-container-name-test-"));
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it("detects hardcoded container names", () => {
+    const composePath = join(tempDir, "docker-compose.yml");
+    writeFileSync(composePath, `
+services:
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+`);
+
+    const result = detectHardcodedContainerNames(composePath);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].service).toBe("prometheus");
+    expect(result[0].containerName).toBe("prometheus");
+  });
+
+  it("ignores services without container_name", () => {
+    const composePath = join(tempDir, "docker-compose.yml");
+    writeFileSync(composePath, `
+services:
+  web:
+    image: nginx
+    ports:
+      - "80:80"
+`);
+
+    const result = detectHardcodedContainerNames(composePath);
+
+    expect(result).toHaveLength(0);
+  });
+
+  it("ignores container_name with variable interpolation", () => {
+    const composePath = join(tempDir, "docker-compose.yml");
+    writeFileSync(composePath, `
+services:
+  web:
+    image: nginx
+    container_name: \${COMPOSE_PROJECT_NAME}-web
+`);
+
+    const result = detectHardcodedContainerNames(composePath);
+
+    expect(result).toHaveLength(0);
+  });
+
+  it("returns multiple services with hardcoded container names", () => {
+    const composePath = join(tempDir, "docker-compose.yml");
+    writeFileSync(composePath, `
+services:
+  prometheus:
+    container_name: prometheus
+  homer:
+    container_name: homer
+  mailhog:
+    container_name: mailhog
+`);
+
+    const result = detectHardcodedContainerNames(composePath);
+
+    expect(result).toHaveLength(3);
+    expect(result.find(r => r.service === "prometheus")).toBeDefined();
+    expect(result.find(r => r.service === "homer")).toBeDefined();
+    expect(result.find(r => r.service === "mailhog")).toBeDefined();
+  });
+
+  it("handles mixed hardcoded and variable container names", () => {
+    const composePath = join(tempDir, "docker-compose.yml");
+    writeFileSync(composePath, `
+services:
+  prometheus:
+    container_name: prometheus
+  web:
+    container_name: \${PROJECT_NAME}-web
+`);
+
+    const result = detectHardcodedContainerNames(composePath);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].service).toBe("prometheus");
+  });
+
+  it("handles empty services object", () => {
+    const composePath = join(tempDir, "docker-compose.yml");
+    writeFileSync(composePath, "services: {}");
+
+    const result = detectHardcodedContainerNames(composePath);
+
+    expect(result).toHaveLength(0);
+  });
+
+  it("returns empty array for malformed YAML", () => {
+    const composePath = join(tempDir, "docker-compose.yml");
+    writeFileSync(composePath, "services:\n  web:\n    container_name: [invalid");
+
+    const result = detectHardcodedContainerNames(composePath);
 
     expect(result).toHaveLength(0);
   });
