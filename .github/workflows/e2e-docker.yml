@@ -1,0 +1,110 @@
+name: E2E Tests (Docker)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'docker/**'
+      - 'package.json'
+      - '.github/workflows/e2e-docker.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'docker/**'
+      - 'package.json'
+      - '.github/workflows/e2e-docker.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-docker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-binary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build Linux binary
+        run: |
+          bun build --compile --minify --target=bun-linux-x64 \
+            --define "GROVE_VERSION=\"${{ github.sha }}\"" \
+            ./src/index.ts --outfile dist/grove-linux-x64
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: grove-binary
+          path: dist/grove-linux-x64
+          retention-days: 1
+
+  e2e-docker:
+    needs: build-binary
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        variant:
+          - name: base
+            description: "Base (git only)"
+          - name: fzf
+            description: "With FZF"
+          - name: zellij
+            description: "With Zellij"
+          - name: full
+            description: "Full (FZF + Zellij)"
+          - name: zellij-session
+            description: "Inside Zellij session"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: grove-binary
+          path: dist/
+
+      - name: Make binary executable
+        run: chmod +x dist/grove-linux-x64
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: |
+          docker compose -f docker/docker-compose.e2e.yml build e2e-${{ matrix.variant.name }}
+
+      - name: Run E2E tests (${{ matrix.variant.description }})
+        run: |
+          docker compose -f docker/docker-compose.e2e.yml run --rm e2e-${{ matrix.variant.name }}
+        timeout-minutes: 10
+
+  e2e-summary:
+    needs: e2e-docker
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          if [ "${{ needs.e2e-docker.result }}" != "success" ]; then
+            echo "::error::E2E tests failed in one or more variants"
+            exit 1
+          fi
+          echo "All E2E test variants passed"

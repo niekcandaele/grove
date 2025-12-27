@@ -1,0 +1,78 @@
+# Grove E2E Test Environment
+# Build with different dependency combinations using build args
+#
+# Usage:
+#   docker build --build-arg WITH_ZELLIJ=1 --build-arg WITH_FZF=1 -f docker/Dockerfile.e2e .
+#
+# Variants:
+#   base:    WITH_ZELLIJ=0 WITH_FZF=0 (git only)
+#   fzf:     WITH_ZELLIJ=0 WITH_FZF=1
+#   zellij:  WITH_ZELLIJ=1 WITH_FZF=0
+#   full:    WITH_ZELLIJ=1 WITH_FZF=1
+
+ARG WITH_ZELLIJ=0
+ARG WITH_FZF=0
+
+FROM debian:bookworm-slim AS base
+
+# Install essential packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    bash \
+    ca-certificates \
+    curl \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Configure git defaults
+RUN git config --global user.email "test@grove.local" \
+    && git config --global user.name "Grove Test" \
+    && git config --global init.defaultBranch main
+
+# Install Bun for running tests
+RUN curl -fsSL https://bun.sh/install | bash
+ENV PATH="/root/.bun/bin:${PATH}"
+
+# ---- FZF Installation ----
+FROM base AS with-fzf
+ARG WITH_FZF
+RUN if [ "$WITH_FZF" = "1" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends fzf \
+      && rm -rf /var/lib/apt/lists/*; \
+    fi
+
+# ---- Zellij Installation ----
+FROM with-fzf AS with-zellij
+ARG WITH_ZELLIJ
+# Zellij is not in Debian repos, download from GitHub releases
+RUN if [ "$WITH_ZELLIJ" = "1" ]; then \
+      ZELLIJ_VERSION="0.41.2" \
+      && ARCH=$(dpkg --print-architecture) \
+      && case "$ARCH" in \
+           amd64) ZELLIJ_ARCH="x86_64" ;; \
+           arm64) ZELLIJ_ARCH="aarch64" ;; \
+           *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
+         esac \
+      && curl -fsSL "https://github.com/zellij-org/zellij/releases/download/v${ZELLIJ_VERSION}/zellij-${ZELLIJ_ARCH}-unknown-linux-musl.tar.gz" \
+         | tar -xz -C /usr/local/bin \
+      && chmod +x /usr/local/bin/zellij; \
+    fi
+
+# ---- Final Runtime ----
+FROM with-zellij AS runtime
+
+WORKDIR /workspace
+
+# Copy package files first (better layer caching)
+COPY package.json bun.lock* ./
+
+# Install dependencies
+RUN bun install --frozen-lockfile
+
+# Copy test files and configs
+COPY tests/ ./tests/
+COPY vitest.config.ts ./
+COPY tsconfig.json ./
+
+# Default command runs e2e tests
+CMD ["bun", "run", "test:e2e"]
