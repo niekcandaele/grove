@@ -169,6 +169,15 @@ export function getCurrentBranch(cwd: string): string {
   return exec("git branch --show-current", cwd);
 }
 
+export function getLastCommitDate(worktreePath: string): Date | null {
+  try {
+    const output = exec("git log -1 --format=%aI", worktreePath);
+    return new Date(output);
+  } catch {
+    return null;
+  }
+}
+
 export function isGitRepository(path: string): boolean {
   return existsSync(join(path, ".git"));
 }
