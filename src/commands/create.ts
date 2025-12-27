@@ -11,127 +11,9 @@ import {
   copyConfiguredFiles,
   configureEnvFile,
   getPortVariablesFromProject,
-  hasDockerCompose,
-  generateDockerOverride,
-  writeDockerOverride,
-  setComposeFilePath,
-  getComposeFilePath,
-  detectHardcodedComposePorts,
-  detectHardcodedContainerNames,
-  type HardcodedPort,
-  type HardcodedContainerName,
 } from "../services/env.js";
 import { allocatePorts } from "../services/ports.js";
 import { isInsideZellij, generateNewTabCommand } from "../services/zellij.js";
-import { confirm, isInteractive } from "../utils/prompt.js";
-
-function printHardcodedPortsWarning(hardcoded: HardcodedPort[], projectRoot: string): void {
-  console.log("");
-  console.log("⚠️  Warning: Found hardcoded ports in docker-compose.yml");
-  console.log("");
-  console.log("These services have ports that won't be managed by grove:");
-  for (const { service, ports } of hardcoded) {
-    console.log(`  - ${service}: ${ports.join(", ")}`);
-  }
-  console.log("");
-  console.log("Copy this prompt to an AI assistant to fix it automatically:");
-  console.log("");
-  console.log("─".repeat(60));
-  console.log(`Update this project to use environment variables for Docker Compose ports.
-
-## Hardcoded ports found`);
-  for (const { service, ports } of hardcoded) {
-    console.log(`- Service "${service}": ${ports.join(", ")}`);
-  }
-  console.log(`
-## Instructions
-
-For each hardcoded port (format is \`host:container\`):
-
-1. **Add variable to .env.example**
-   - Only the HOST port (left side) needs a variable
-   - Container port (right side) stays fixed
-   - Naming convention: \`SERVICE_PURPOSE_PORT\` (e.g., \`WEB_HTTP_PORT\`, \`POSTGRES_HOST_PORT\`)
-   - Check existing variables in .env.example to avoid conflicts
-
-2. **Update docker-compose.yml**
-   Use the variable with a default: \`\${WEB_HTTP_PORT:-8080}:80\`
-
-3. **Add portMapping to .grove.json**
-   Create or update .grove.json with:
-   \`\`\`json
-   {
-     "portVarPatterns": ["*_PORT"],
-     "portRange": [30000, 39999],
-     "portMapping": {
-       "WEB_HTTP_PORT": { "service": "web", "containerPort": 80 },
-       "DB_PORT": { "service": "postgres", "containerPort": 5432 }
-     }
-   }
-   \`\`\`
-
-## Example transformation
-
-Before (docker-compose.yml):
-\`\`\`yaml
-ports:
-  - "8080:80"
-\`\`\`
-
-After:
-- .env.example: \`WEB_HTTP_PORT=8080\`
-- docker-compose.yml: \`- "\${WEB_HTTP_PORT:-8080}:80"\`
-- .grove.json portMapping: \`"WEB_HTTP_PORT": { "service": "web", "containerPort": 80 }\`
-
-Project root: ${projectRoot}`);
-  console.log("─".repeat(60));
-}
-
-function printHardcodedContainerNamesWarning(hardcoded: HardcodedContainerName[], projectRoot: string): void {
-  console.log("");
-  console.log("⚠️  Warning: Found hardcoded container names in docker-compose.yml");
-  console.log("");
-  console.log("These container names will conflict when running multiple environments:");
-  for (const { service, containerName } of hardcoded) {
-    console.log(`  - ${service}: ${containerName}`);
-  }
-  console.log("");
-  console.log("Copy this prompt to an AI assistant to fix it automatically:");
-  console.log("");
-  console.log("─".repeat(60));
-  console.log(`Update this project to remove hardcoded container names from Docker Compose.
-
-## Hardcoded container names found`);
-  for (const { service, containerName } of hardcoded) {
-    console.log(`- Service "${service}": ${containerName}`);
-  }
-  console.log(`
-## Why this is a problem
-
-Hardcoded container names cause conflicts when running multiple environments.
-Docker Compose automatically generates unique names using the project name
-prefix (e.g., \`myproject-prometheus-1\`), which prevents conflicts.
-
-## Instructions
-
-Remove the \`container_name\` field from each service listed above.
-
-Before:
-\`\`\`yaml
-prometheus:
-  image: prom/prometheus
-  container_name: prometheus
-\`\`\`
-
-After:
-\`\`\`yaml
-prometheus:
-  image: prom/prometheus
-\`\`\`
-
-Project root: ${projectRoot}`);
-  console.log("─".repeat(60));
-}
 
 export const createCommand = defineCommand({
   meta: {
@@ -150,17 +32,10 @@ export const createCommand = defineCommand({
       description: "Show detailed output",
       default: false,
     },
-    force: {
-      type: "boolean",
-      alias: "f",
-      description: "Skip confirmation prompt for hardcoded ports",
-      default: false,
-    },
   },
   async run({ args }) {
     const rawName = args.name as string;
     const verbose = args.verbose as boolean;
-    const force = args.force as boolean;
 
     // Find project root
     const projectRoot = findProjectRoot();
@@ -208,40 +83,7 @@ export const createCommand = defineCommand({
       process.exit(0);
     }
 
-    // Check for hardcoded ports and container names BEFORE creating worktree
     const mainWorktreePath = getMainWorktreePath(projectRoot);
-    const hasComposeInMain = hasDockerCompose(mainWorktreePath);
-
-    if (hasComposeInMain && !force) {
-      const composePath = getComposeFilePath(mainWorktreePath);
-      if (composePath) {
-        const hardcodedPorts = detectHardcodedComposePorts(composePath);
-        const hardcodedNames = detectHardcodedContainerNames(composePath);
-
-        if (hardcodedPorts.length > 0) {
-          printHardcodedPortsWarning(hardcodedPorts, projectRoot);
-        }
-
-        if (hardcodedNames.length > 0) {
-          printHardcodedContainerNamesWarning(hardcodedNames, projectRoot);
-        }
-
-        if (hardcodedPorts.length > 0 || hardcodedNames.length > 0) {
-          if (!isInteractive()) {
-            console.log("");
-            console.log("Run with --force to skip this prompt in non-interactive mode.");
-            process.exit(1);
-          }
-
-          const confirmed = await confirm("Continue creating worktree?");
-          if (!confirmed) {
-            console.log("Cancelled");
-            process.exit(0);
-          }
-          console.log("");
-        }
-      }
-    }
 
     // Create worktree
     console.log(`Creating worktree...`);
@@ -356,28 +198,6 @@ export const createCommand = defineCommand({
       }
     } else {
       console.log(`  No port variables found`);
-    }
-
-    // Handle Docker Compose override if portMapping is configured
-    const hasPortMapping = Object.keys(config.portMapping).length > 0;
-    const hasCompose = hasDockerCompose(worktreePath);
-
-    if (verbose) {
-      console.log(`[verbose] Docker Compose: ${hasCompose ? "found" : "not found"}`);
-      console.log(`[verbose] Port mapping configured: ${hasPortMapping}`);
-    }
-
-    if (hasPortMapping && hasCompose && Object.keys(allocatedPorts).length > 0) {
-      console.log(`Configuring Docker Compose...`);
-
-      const overrideContent = generateDockerOverride(allocatedPorts, config.portMapping);
-
-      if (overrideContent) {
-        const overridePath = writeDockerOverride(projectRoot, envName, overrideContent);
-        setComposeFilePath(worktreePath, overridePath);
-        console.log(`  Override: ${overridePath}`);
-        console.log(`  COMPOSE_FILE set in .env`);
-      }
     }
 
     // Zellij integration - create tab when inside session

@@ -1,9 +1,8 @@
 import { defineCommand } from "citty";
 import { findProjectRoot } from "../config/project.js";
-import { getPortRegistryPath, getOverridesDir } from "../utils/paths.js";
+import { getPortRegistryPath } from "../utils/paths.js";
 import { getWorktreeByName, removeWorktree } from "../services/git.js";
 import { releasePorts, getPortsForEnvironment } from "../services/ports.js";
-import { removeDockerOverride, getOverridePath } from "../services/env.js";
 import { isInsideZellij, closeTabByName } from "../services/zellij.js";
 import { confirm } from "../utils/prompt.js";
 
@@ -51,7 +50,6 @@ export const deleteCommand = defineCommand({
     if (verbose) {
       console.log(`[verbose] Project root: ${projectRoot}`);
       console.log(`[verbose] Port registry: ${getPortRegistryPath()}`);
-      console.log(`[verbose] Overrides dir: ${getOverridesDir()}`);
     }
 
     // Find the worktree
@@ -126,16 +124,6 @@ export const deleteCommand = defineCommand({
     const releasedCount = releasePorts(projectRoot, envName);
     if (releasedCount > 0) {
       console.log(`  Released ${releasedCount} port(s)`);
-    }
-
-    // Remove Docker override if it exists
-    const overridePath = getOverridePath(projectRoot, envName);
-    if (verbose) {
-      console.log(`[verbose] Checking for Docker override at: ${overridePath}`);
-    }
-    const overrideRemoved = removeDockerOverride(projectRoot, envName);
-    if (overrideRemoved) {
-      console.log(`  Removed Docker override`);
     }
 
     // Close Zellij tab if inside Zellij session

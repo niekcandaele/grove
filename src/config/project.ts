@@ -2,16 +2,10 @@ import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { loadGlobalConfig, type GlobalConfig } from "./global.js";
 
-export interface PortMappingEntry {
-  service: string;
-  containerPort: number;
-}
-
 export interface ProjectConfig {
   worktreeDir: string;
   baseBranch: string;
   portVarPatterns: string[];
-  portMapping: Record<string, string | PortMappingEntry>;
   portRange: [number, number];
   copyFiles: string[];
 }
@@ -20,7 +14,6 @@ interface ProjectConfigFile {
   worktreeDir?: string;
   baseBranch?: string;
   portVarPatterns?: string[];
-  portMapping?: Record<string, string | PortMappingEntry>;
   copyFiles?: string[];
 }
 
@@ -37,7 +30,6 @@ export function loadProjectConfig(projectRoot: string): ProjectConfig {
     worktreeDir: getDefaultWorktreeDir(projectRoot),
     baseBranch: global.defaultBaseBranch,
     portVarPatterns: ["*_PORT"],
-    portMapping: {},
     portRange: global.defaultPortRange,
     copyFiles: [".claude/settings.local.json", ".envrc"],
   };

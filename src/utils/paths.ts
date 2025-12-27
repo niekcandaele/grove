@@ -22,7 +22,3 @@ export function getConfigPath(): string {
 export function getPortRegistryPath(): string {
   return join(getStateDir(), "ports.json");
 }
-
-export function getOverridesDir(): string {
-  return join(getStateDir(), "overrides");
-}

@@ -1,6 +1,6 @@
 import { execSync } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
 
 export interface WorktreeInfo {
   path: string;
@@ -145,7 +145,7 @@ export function getCurrentWorktree(
 
   for (const wt of sorted) {
     const normalizedPath = resolve(wt.path);
-    if (normalizedCwd === normalizedPath || normalizedCwd.startsWith(normalizedPath + "/")) {
+    if (normalizedCwd === normalizedPath || normalizedCwd.startsWith(normalizedPath + sep)) {
       return wt;
     }
   }

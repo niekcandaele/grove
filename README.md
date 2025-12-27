@@ -110,10 +110,7 @@ Create this file in your project root:
   "baseBranch": "main",
   "portVarPatterns": ["*_PORT"],
   "portRange": [30000, 39999],
-  "portMapping": {
-    "HTTP_PORT": { "service": "web", "containerPort": 80 },
-    "DB_PORT": { "service": "postgres", "containerPort": 5432 }
-  }
+  "copyFiles": [".envrc"]
 }
 ```
 
@@ -123,31 +120,7 @@ Create this file in your project root:
 | `baseBranch` | `main` | Branch to create new branches from |
 | `portVarPatterns` | `["*_PORT"]` | Glob patterns for port variables in `.env` |
 | `portRange` | `[30000, 39999]` | Port allocation range |
-| `portMapping` | `{}` | Docker service port mappings |
-
-### Port Mapping Formats
-
-**Object format** (recommended):
-
-```json
-{
-  "portMapping": {
-    "HTTP_PORT": { "service": "web", "containerPort": 80 }
-  }
-}
-```
-
-**String format** (uses default container ports):
-
-```json
-{
-  "portMapping": {
-    "HTTP_PORT": "web"
-  }
-}
-```
-
-Default container ports: HTTP/API → 3000, DB/POSTGRES → 5432, REDIS → 6379, etc.
+| `copyFiles` | `[]` | Files to copy from main worktree to new worktrees |
 
 ### Global Config (`~/.config/grove/config.json`)
 
@@ -160,36 +133,37 @@ Default container ports: HTTP/API → 3000, DB/POSTGRES → 5432, REDIS → 6379
 
 ## Docker Compose Integration
 
-When `portMapping` is configured and `docker-compose.yml` exists, the tool:
+Grove allocates ports and updates your `.env` file. To use these ports with Docker Compose, use environment variable syntax in your `docker-compose.yml`:
 
-1. Generates an override file **outside** the repository
-2. Sets `COMPOSE_FILE` in `.env` to point to both files
-3. Uses `!override` tag to replace port arrays (not append)
-
-**Example:**
-
-Your `docker-compose.yml`:
 ```yaml
 services:
   web:
     image: nginx
     ports:
-      - "80:80"
+      - "${HTTP_PORT:-8080}:80"
+  postgres:
+    image: postgres
+    ports:
+      - "${DB_PORT:-5432}:5432"
 ```
 
-Generated override (stored outside repo):
-```yaml
-services:
-  web:
-    ports: !override
-      - "30001:80"
-```
+When Grove creates a worktree, it allocates unique ports (e.g., `HTTP_PORT=30001`) in the `.env` file. Docker Compose reads these automatically.
 
-Result: Port 30001 maps to container port 80, no git changes.
+**Setup:**
 
-**Requirements:**
-- Docker Compose 2.24.4+ (for `!override` tag support)
-- For older versions, use env variables in your compose file: `${HTTP_PORT:-8080}:80`
+1. Add port variables to `.env.example`:
+   ```
+   HTTP_PORT=8080
+   DB_PORT=5432
+   ```
+
+2. Use variable syntax in `docker-compose.yml`:
+   ```yaml
+   ports:
+     - "${HTTP_PORT:-8080}:80"
+   ```
+
+The `:-8080` provides a default value for when `.env` doesn't exist.
 
 ## Zellij Integration
 
@@ -211,7 +185,6 @@ Session names are derived from the project directory (e.g., `my-app` for `/home/
 |------|----------|
 | Global config | `~/.config/grove/config.json` |
 | Port registry | `~/.local/state/grove/ports.json` |
-| Docker overrides | `~/.local/state/grove/overrides/<hash>/<env>/` |
 
 ## Examples
 
@@ -237,23 +210,36 @@ grove create feature-login
 
 ### Project with Docker Compose
 
-`.grove.json`:
-```json
-{
-  "portMapping": {
-    "HTTP_PORT": { "service": "app", "containerPort": 3000 },
-    "DB_PORT": { "service": "postgres", "containerPort": 5432 }
-  }
-}
+`.env.example`:
+```bash
+HTTP_PORT=3000
+DB_PORT=5432
+```
+
+`docker-compose.yml`:
+```yaml
+services:
+  app:
+    ports:
+      - "${HTTP_PORT:-3000}:3000"
+  postgres:
+    ports:
+      - "${DB_PORT:-5432}:5432"
 ```
 
 ```bash
 grove create feature-api
 
-# Also outputs:
-# Configuring Docker Compose...
-#   Override: ~/.local/state/grove/overrides/.../docker-compose.override.yml
-#   COMPOSE_FILE set in .env
+# Output:
+# Creating worktree...
+#   Branch: feature-api
+#   Path: /home/user/my-app-worktrees/feature-api
+#   Copied .env file
+# Allocating ports...
+#   HTTP_PORT=30000
+#   DB_PORT=30001
+#
+# Environment "feature-api" created successfully!
 ```
 
 In the worktree, `docker compose up` uses the allocated ports automatically.
@@ -284,15 +270,6 @@ Run the command from within a git repository.
 ### Environment not found
 
 Check available environments with `grove list`.
-
-### Docker Compose shows two port mappings
-
-Your Docker Compose version is too old. Upgrade to 2.24.4+ or use environment variables in your compose file:
-
-```yaml
-ports:
-  - "${HTTP_PORT:-8080}:80"
-```
 
 ### Port conflict
 
