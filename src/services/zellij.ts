@@ -52,3 +52,20 @@ export function generateGoToTabCommand(tabName: string): string {
 export function generateAttachCommand(sessionName: string): string {
   return `zellij attach ${shellEscape(sessionName)} --create`;
 }
+
+/**
+ * Close a tab by name. Switches to the tab and closes it.
+ * Returns true if successful, false if tab doesn't exist or close failed.
+ * Only works from inside a Zellij session.
+ */
+export function closeTabByName(tabName: string): boolean {
+  try {
+    // Switch to the tab (fails if it doesn't exist)
+    execSync(`zellij action go-to-tab-name ${shellEscape(tabName)}`, { stdio: "pipe" });
+    // Close the current tab
+    execSync("zellij action close-tab", { stdio: "pipe" });
+    return true;
+  } catch {
+    return false;
+  }
+}
