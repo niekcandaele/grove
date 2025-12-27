@@ -271,24 +271,3 @@ export function getPortVariablesFromProject(
 
   return scanPortVariables(content, patterns);
 }
-
-/**
- * Append a variable to .env file
- */
-export function appendToEnvFile(
-  envPath: string,
-  key: string,
-  value: string
-): void {
-  let content = "";
-
-  if (existsSync(envPath)) {
-    content = readFileSync(envPath, "utf-8");
-    if (!content.endsWith("\n")) {
-      content += "\n";
-    }
-  }
-
-  content += `${key}=${value}\n`;
-  writeFileSync(envPath, content, { mode: 0o600 });
-}

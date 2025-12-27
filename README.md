@@ -29,7 +29,6 @@ Binaries available for Linux, macOS, and Windows (x64 and arm64).
 ### Requirements
 
 - Git
-- Docker Compose 2.24.4+ (optional)
 
 ## Quick Start
 
@@ -64,7 +63,6 @@ grove create <name> [--verbose]
 - Creates git branch and worktree
 - Copies `.env.example` to `.env`
 - Allocates unique ports for all `*_PORT` variables
-- Generates Docker Compose override (if configured)
 
 ### activate
 

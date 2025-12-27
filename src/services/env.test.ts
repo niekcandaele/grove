@@ -17,7 +17,6 @@ import {
   copyEnvFile,
   configureEnvFile,
   getPortVariablesFromProject,
-  appendToEnvFile,
 } from "./env.js";
 
 // Pure function tests
@@ -259,47 +258,6 @@ describe("getPortVariablesFromProject", () => {
     const result = getPortVariablesFromProject(tempDir, ["*_PORT"]);
 
     expect(result).toHaveLength(0);
-  });
-});
-
-describe("appendToEnvFile", () => {
-  let tempDir: string;
-
-  beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), "ai-env-append-test-"));
-  });
-
-  afterEach(() => {
-    rmSync(tempDir, { recursive: true, force: true });
-  });
-
-  it("appends to existing file", () => {
-    const envPath = join(tempDir, ".env");
-    writeFileSync(envPath, "FOO=bar\n");
-
-    appendToEnvFile(envPath, "BAZ", "qux");
-
-    const content = readFileSync(envPath, "utf-8");
-    expect(content).toBe("FOO=bar\nBAZ=qux\n");
-  });
-
-  it("creates file if not exists", () => {
-    const envPath = join(tempDir, ".env");
-
-    appendToEnvFile(envPath, "FOO", "bar");
-
-    expect(existsSync(envPath)).toBe(true);
-    expect(readFileSync(envPath, "utf-8")).toBe("FOO=bar\n");
-  });
-
-  it("adds newline before appending if missing", () => {
-    const envPath = join(tempDir, ".env");
-    writeFileSync(envPath, "FOO=bar");
-
-    appendToEnvFile(envPath, "BAZ", "qux");
-
-    const content = readFileSync(envPath, "utf-8");
-    expect(content).toBe("FOO=bar\nBAZ=qux\n");
   });
 });
 
