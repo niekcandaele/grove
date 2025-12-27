@@ -288,13 +288,17 @@ describe("copyEnvFile", () => {
     expect(existsSync(join(worktreePath, ".env"))).toBe(false);
   });
 
-  it("prefers .env.example over main .env", () => {
-    writeFileSync(join(worktreePath, ".env.example"), "EXAMPLE=yes");
-    writeFileSync(join(mainWorktreePath, ".env"), "MAIN=no");
+  it("merges .env.example with main .env values", () => {
+    writeFileSync(join(worktreePath, ".env.example"), "EXAMPLE=yes\nSHARED=example");
+    writeFileSync(join(mainWorktreePath, ".env"), "MAIN=no\nSHARED=main");
 
     copyEnvFile(worktreePath, mainWorktreePath);
 
-    expect(readFileSync(join(worktreePath, ".env"), "utf-8")).toBe("EXAMPLE=yes");
+    const result = readFileSync(join(worktreePath, ".env"), "utf-8");
+    // Base structure from .env.example, values overlaid from main .env
+    expect(result).toContain("EXAMPLE=yes");
+    expect(result).toContain("SHARED=main"); // main .env value takes precedence
+    expect(result).toContain("MAIN=no"); // appended from main .env
   });
 });
 

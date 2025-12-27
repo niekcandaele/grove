@@ -91,6 +91,39 @@ function matchPattern(key: string, pattern: string): boolean {
 }
 
 /**
+ * Merge overlay values into base .env content, preserving structure and comments
+ */
+function mergeEnvContent(baseContent: string, overlay: Map<string, string>): string {
+  const lines = baseContent.split("\n");
+  const seen = new Set<string>();
+
+  const merged = lines.map(line => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) return line;
+
+    const match = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)=/);
+    if (match) {
+      const key = match[1];
+      seen.add(key);
+      if (overlay.has(key)) {
+        const leadingWhitespace = line.match(/^\s*/)?.[0] || "";
+        return `${leadingWhitespace}${key}=${overlay.get(key)}`;
+      }
+    }
+    return line;
+  });
+
+  // Append variables from overlay not in base
+  for (const [key, value] of overlay) {
+    if (!seen.has(key)) {
+      merged.push(`${key}=${value}`);
+    }
+  }
+
+  return merged.join("\n");
+}
+
+/**
  * Update port values in .env content
  */
 export function updateEnvPorts(
@@ -130,7 +163,8 @@ export function updateEnvPorts(
 }
 
 /**
- * Copy .env.example to .env in worktree, or copy from main worktree
+ * Copy and merge .env files from worktree and main worktree
+ * Starts with .env.example as base, overlays main .env values on top
  */
 export function copyEnvFile(
   worktreePath: string,
@@ -140,14 +174,29 @@ export function copyEnvFile(
   const envPath = join(worktreePath, ".env");
   const mainEnvPath = join(mainWorktreePath, ".env");
 
-  // Priority: .env.example in worktree > .env in main worktree
+  // Start with .env.example as base (if exists)
+  let baseContent = "";
   if (existsSync(envExamplePath)) {
-    copyFileSync(envExamplePath, envPath);
+    baseContent = readFileSync(envExamplePath, "utf-8");
+  }
+
+  // Overlay main .env values on top
+  if (existsSync(mainEnvPath)) {
+    const mainContent = readFileSync(mainEnvPath, "utf-8");
+    const mainVars = parseEnvFile(mainContent);
+
+    if (baseContent) {
+      const merged = mergeEnvContent(baseContent, mainVars);
+      writeFileSync(envPath, merged, { mode: 0o600 });
+    } else {
+      copyFileSync(mainEnvPath, envPath);
+    }
     return true;
   }
 
-  if (existsSync(mainEnvPath)) {
-    copyFileSync(mainEnvPath, envPath);
+  // Fallback: just use .env.example if no main .env
+  if (baseContent) {
+    writeFileSync(envPath, baseContent, { mode: 0o600 });
     return true;
   }
 
