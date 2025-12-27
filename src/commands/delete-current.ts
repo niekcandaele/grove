@@ -1,22 +1,23 @@
 import { defineCommand } from "citty";
 import { findProjectRoot } from "../config/project.js";
 import { getPortRegistryPath } from "../utils/paths.js";
-import { getWorktreeByName, removeWorktree } from "../services/git.js";
+import {
+  getCurrentWorktree,
+  isMainWorktree,
+  getMainWorktreePath,
+  removeWorktree,
+} from "../services/git.js";
 import { releasePorts, getPortsForEnvironment } from "../services/ports.js";
 import { isInsideZellij, closeTabByName } from "../services/zellij.js";
 import { confirm } from "../utils/prompt.js";
+import { shellEscape } from "../utils/shell.js";
 
-export const deleteCommand = defineCommand({
+export const deleteCurrentCommand = defineCommand({
   meta: {
-    name: "delete",
-    description: "Delete an environment and release its ports",
+    name: "delete-current",
+    description: "Delete the current worktree environment",
   },
   args: {
-    name: {
-      type: "positional",
-      description: "Name of the environment to delete",
-      required: true,
-    },
     force: {
       type: "boolean",
       description: "Skip confirmation prompt",
@@ -35,7 +36,6 @@ export const deleteCommand = defineCommand({
     },
   },
   async run({ args }) {
-    const envName = args.name as string;
     const force = args.force as boolean;
     const deleteBranch = args["delete-branch"] as boolean;
     const verbose = args.verbose as boolean;
@@ -52,17 +52,30 @@ export const deleteCommand = defineCommand({
       console.log(`[verbose] Port registry: ${getPortRegistryPath()}`);
     }
 
-    // Find the worktree
-    const worktree = getWorktreeByName(envName, projectRoot);
+    // Find the current worktree
+    const cwd = process.cwd();
+    const worktree = getCurrentWorktree(cwd, projectRoot);
+
     if (!worktree) {
-      console.error(`Error: Environment "${envName}" not found`);
+      console.error("Error: Not inside a worktree");
       console.error("");
-      console.error("Run 'grove list' to see available environments");
+      console.error("Run this command from within a worktree directory");
       process.exit(1);
     }
 
+    // Block deletion of main worktree
+    if (isMainWorktree(worktree.path)) {
+      console.error("Error: Cannot delete the main worktree");
+      console.error("");
+      console.error("This command is for deleting linked worktrees only.");
+      console.error("The main repository worktree cannot be deleted with this command.");
+      process.exit(1);
+    }
+
+    const envName = worktree.branch;
+
     if (verbose) {
-      console.log(`[verbose] Found worktree:`);
+      console.log(`[verbose] Current worktree:`);
       console.log(`[verbose]   Path: ${worktree.path}`);
       console.log(`[verbose]   Branch: ${worktree.branch}`);
       console.log(`[verbose]   HEAD: ${worktree.head}`);
@@ -89,14 +102,17 @@ export const deleteCommand = defineCommand({
     // Confirm deletion
     if (!force) {
       const deleteWhat = deleteBranch
-        ? "Delete worktree and branch?"
-        : "Delete worktree? (branch will be kept)";
+        ? "Delete this worktree and branch?"
+        : "Delete this worktree? (branch will be kept)";
       const confirmed = await confirm(deleteWhat);
       if (!confirmed) {
         console.log("Cancelled");
         return;
       }
     }
+
+    // Get main worktree path before deletion
+    const mainWorktreePath = getMainWorktreePath(projectRoot);
 
     // Remove worktree
     console.log("Removing worktree...");
@@ -141,5 +157,10 @@ export const deleteCommand = defineCommand({
 
     console.log("");
     console.log(`Environment "${envName}" deleted`);
+
+    // Output cd command to return to main worktree
+    console.log("");
+    console.log("Your current directory no longer exists. Run:");
+    console.log(`  cd ${shellEscape(mainWorktreePath)}`);
   },
 });

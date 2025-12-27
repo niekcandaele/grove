@@ -20,7 +20,6 @@ describe("loadProjectConfig", () => {
 
     expect(config.baseBranch).toBe("main");
     expect(config.portVarPatterns).toEqual(["*_PORT"]);
-    expect(config.portMapping).toEqual({});
     expect(config.portRange).toEqual([30000, 39999]);
   });
 
@@ -29,10 +28,6 @@ describe("loadProjectConfig", () => {
       baseBranch: "develop",
       worktreeDir: "../custom-worktrees",
       portVarPatterns: ["*_PORT", "*_port"],
-      portMapping: {
-        HTTP_PORT: "web",
-        DB_PORT: "postgres",
-      },
     };
 
     writeFileSync(
@@ -45,10 +40,6 @@ describe("loadProjectConfig", () => {
     expect(config.baseBranch).toBe("develop");
     expect(config.worktreeDir).toBe("../custom-worktrees");
     expect(config.portVarPatterns).toEqual(["*_PORT", "*_port"]);
-    expect(config.portMapping).toEqual({
-      HTTP_PORT: "web",
-      DB_PORT: "postgres",
-    });
   });
 
   it("merges project config with defaults", () => {

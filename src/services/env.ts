@@ -1,19 +1,5 @@
-import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync, rmSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, copyFileSync, mkdirSync } from "node:fs";
 import { join, dirname } from "node:path";
-import { createHash } from "node:crypto";
-import yaml from "js-yaml";
-import { getOverridesDir } from "../utils/paths.js";
-import type { PortMappingEntry } from "../config/project.js";
-
-export interface HardcodedPort {
-  service: string;
-  ports: string[];
-}
-
-export interface HardcodedContainerName {
-  service: string;
-  containerName: string;
-}
 
 export interface EnvVar {
   name: string;
@@ -91,6 +77,46 @@ function matchPattern(key: string, pattern: string): boolean {
 }
 
 /**
+ * Merge overlay values into base .env content, preserving structure and comments
+ */
+function mergeEnvContent(baseContent: string, overlay: Map<string, string>): string {
+  const lines = baseContent.split("\n");
+  const seen = new Set<string>();
+
+  const merged = lines.map(line => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) return line;
+
+    const match = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)=/);
+    if (match) {
+      const key = match[1];
+      seen.add(key);
+      if (overlay.has(key)) {
+        const leadingWhitespace = line.match(/^\s*/)?.[0] || "";
+        let value = overlay.get(key)!;
+        // Re-quote if value contains spaces or special chars
+        if (/[\s#]/.test(value)) {
+          value = `"${value}"`;
+        }
+        return `${leadingWhitespace}${key}=${value}`;
+      }
+    }
+    return line;
+  });
+
+  // Append variables from overlay not in base
+  for (const [key, value] of overlay) {
+    if (!seen.has(key)) {
+      // Re-quote if value contains spaces or special chars
+      const quotedValue = /[\s#]/.test(value) ? `"${value}"` : value;
+      merged.push(`${key}=${quotedValue}`);
+    }
+  }
+
+  return merged.join("\n");
+}
+
+/**
  * Update port values in .env content
  */
 export function updateEnvPorts(
@@ -130,7 +156,8 @@ export function updateEnvPorts(
 }
 
 /**
- * Copy .env.example to .env in worktree, or copy from main worktree
+ * Copy and merge .env files from worktree and main worktree
+ * Starts with .env.example as base, overlays main .env values on top
  */
 export function copyEnvFile(
   worktreePath: string,
@@ -140,14 +167,29 @@ export function copyEnvFile(
   const envPath = join(worktreePath, ".env");
   const mainEnvPath = join(mainWorktreePath, ".env");
 
-  // Priority: .env.example in worktree > .env in main worktree
+  // Start with .env.example as base (if exists)
+  let baseContent = "";
   if (existsSync(envExamplePath)) {
-    copyFileSync(envExamplePath, envPath);
+    baseContent = readFileSync(envExamplePath, "utf-8");
+  }
+
+  // Overlay main .env values on top
+  if (existsSync(mainEnvPath)) {
+    const mainContent = readFileSync(mainEnvPath, "utf-8");
+    const mainVars = parseEnvFile(mainContent);
+
+    if (baseContent) {
+      const merged = mergeEnvContent(baseContent, mainVars);
+      writeFileSync(envPath, merged, { mode: 0o600 });
+    } else {
+      copyFileSync(mainEnvPath, envPath);
+    }
     return true;
   }
 
-  if (existsSync(mainEnvPath)) {
-    copyFileSync(mainEnvPath, envPath);
+  // Fallback: just use .env.example if no main .env
+  if (baseContent) {
+    writeFileSync(envPath, baseContent, { mode: 0o600 });
     return true;
   }
 
@@ -249,257 +291,4 @@ export function appendToEnvFile(
 
   content += `${key}=${value}\n`;
   writeFileSync(envPath, content, { mode: 0o600 });
-}
-
-/**
- * Get default container port based on variable name patterns
- */
-function getDefaultContainerPort(varName: string, hostPort: number): number {
-  const upper = varName.toUpperCase();
-
-  if (upper.includes("HTTP") || upper.includes("WEB") || upper.includes("APP")) {
-    return 3000;
-  }
-  if (upper.includes("POSTGRES") || upper.includes("PG") || upper.includes("DB_PORT")) {
-    return 5432;
-  }
-  if (upper.includes("REDIS")) {
-    return 6379;
-  }
-  if (upper.includes("MONGO")) {
-    return 27017;
-  }
-  if (upper.includes("MYSQL")) {
-    return 3306;
-  }
-
-  return hostPort;
-}
-
-/**
- * Generate Docker Compose override YAML content
- */
-export function generateDockerOverride(
-  portMap: Record<string, number>,
-  portMapping: Record<string, string | PortMappingEntry>
-): string {
-  const services: Record<string, string[]> = {};
-
-  for (const [varName, hostPort] of Object.entries(portMap)) {
-    const mapping = portMapping[varName];
-    if (!mapping) continue;
-
-    let serviceName: string;
-    let containerPort: number;
-
-    if (typeof mapping === "string") {
-      serviceName = mapping;
-      containerPort = getDefaultContainerPort(varName, hostPort);
-    } else {
-      serviceName = mapping.service;
-      containerPort = mapping.containerPort;
-    }
-
-    if (!services[serviceName]) {
-      services[serviceName] = [];
-    }
-    services[serviceName].push(`"${hostPort}:${containerPort}"`);
-  }
-
-  if (Object.keys(services).length === 0) {
-    return "";
-  }
-
-  let yaml = "services:\n";
-  for (const [service, ports] of Object.entries(services)) {
-    yaml += `  ${service}:\n`;
-    yaml += `    ports: !override\n`;
-    for (const port of ports) {
-      yaml += `      - ${port}\n`;
-    }
-  }
-
-  return yaml;
-}
-
-/**
- * Get project hash for directory naming
- */
-export function getProjectHash(projectRoot: string): string {
-  return createHash("sha256").update(projectRoot).digest("hex").slice(0, 12);
-}
-
-/**
- * Get the override directory path for a project/environment
- */
-export function getOverridePath(projectRoot: string, envName: string): string {
-  const hash = getProjectHash(projectRoot);
-  return join(getOverridesDir(), hash, envName);
-}
-
-/**
- * Write Docker Compose override file outside the repo
- */
-export function writeDockerOverride(
-  projectRoot: string,
-  envName: string,
-  overrideContent: string
-): string {
-  const overrideDir = getOverridePath(projectRoot, envName);
-  const overridePath = join(overrideDir, "docker-compose.override.yml");
-
-  mkdirSync(overrideDir, { recursive: true });
-  writeFileSync(overridePath, overrideContent, { mode: 0o600 });
-
-  return overridePath;
-}
-
-/**
- * Set COMPOSE_FILE in .env to point to main compose and override
- */
-export function setComposeFilePath(
-  worktreePath: string,
-  overridePath: string
-): void {
-  const envPath = join(worktreePath, ".env");
-  appendToEnvFile(envPath, "COMPOSE_FILE", `docker-compose.yml:${overridePath}`);
-}
-
-/**
- * Check if docker-compose.yml exists in a directory
- */
-export function hasDockerCompose(dir: string): boolean {
-  return existsSync(join(dir, "docker-compose.yml")) ||
-         existsSync(join(dir, "docker-compose.yaml")) ||
-         existsSync(join(dir, "compose.yml")) ||
-         existsSync(join(dir, "compose.yaml"));
-}
-
-/**
- * Remove Docker override directory for an environment
- */
-export function removeDockerOverride(projectRoot: string, envName: string): boolean {
-  const overrideDir = getOverridePath(projectRoot, envName);
-
-  if (existsSync(overrideDir)) {
-    rmSync(overrideDir, { recursive: true, force: true });
-    return true;
-  }
-
-  return false;
-}
-
-/**
- * Get the path to the docker-compose file in a directory
- */
-export function getComposeFilePath(dir: string): string | null {
-  const candidates = [
-    "docker-compose.yml",
-    "docker-compose.yaml",
-    "compose.yml",
-    "compose.yaml",
-  ];
-
-  for (const name of candidates) {
-    const path = join(dir, name);
-    if (existsSync(path)) {
-      return path;
-    }
-  }
-
-  return null;
-}
-
-/**
- * Detect hardcoded ports in docker-compose.yml that don't use variable interpolation
- */
-export function detectHardcodedComposePorts(composePath: string): HardcodedPort[] {
-  try {
-    const content = readFileSync(composePath, "utf-8");
-    const doc = yaml.load(content) as Record<string, unknown> | null;
-
-    if (!doc || typeof doc !== "object") {
-      return [];
-    }
-
-    const services = doc.services as Record<string, unknown> | undefined;
-    if (!services || typeof services !== "object") {
-      return [];
-    }
-
-    const results: HardcodedPort[] = [];
-
-    for (const [serviceName, serviceConfig] of Object.entries(services)) {
-      if (!serviceConfig || typeof serviceConfig !== "object") {
-        continue;
-      }
-
-      const ports = (serviceConfig as Record<string, unknown>).ports;
-      if (!Array.isArray(ports)) {
-        continue;
-      }
-
-      const hardcoded: string[] = [];
-
-      for (const port of ports) {
-        const portStr = String(port);
-        // A port is hardcoded if it doesn't contain ${
-        if (!portStr.includes("${")) {
-          hardcoded.push(portStr);
-        }
-      }
-
-      if (hardcoded.length > 0) {
-        results.push({ service: serviceName, ports: hardcoded });
-      }
-    }
-
-    return results;
-  } catch {
-    // YAML parse error or file read error — return empty to avoid crashing
-    return [];
-  }
-}
-
-/**
- * Detect hardcoded container names in docker-compose.yml
- * These cause conflicts when running multiple environments simultaneously
- */
-export function detectHardcodedContainerNames(composePath: string): HardcodedContainerName[] {
-  try {
-    const content = readFileSync(composePath, "utf-8");
-    const doc = yaml.load(content) as Record<string, unknown> | null;
-
-    if (!doc || typeof doc !== "object") {
-      return [];
-    }
-
-    const services = doc.services as Record<string, unknown> | undefined;
-    if (!services || typeof services !== "object") {
-      return [];
-    }
-
-    const results: HardcodedContainerName[] = [];
-
-    for (const [serviceName, serviceConfig] of Object.entries(services)) {
-      if (!serviceConfig || typeof serviceConfig !== "object") {
-        continue;
-      }
-
-      const containerName = (serviceConfig as Record<string, unknown>).container_name;
-      if (typeof containerName !== "string") {
-        continue;
-      }
-
-      // A container name is hardcoded if it doesn't contain ${
-      if (!containerName.includes("${")) {
-        results.push({ service: serviceName, containerName });
-      }
-    }
-
-    return results;
-  } catch {
-    // YAML parse error or file read error — return empty to avoid crashing
-    return [];
-  }
 }
