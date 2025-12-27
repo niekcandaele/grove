@@ -8,6 +8,13 @@ import { expect } from "vitest";
 import type { RunResult } from "./grove-runner.js";
 
 /**
+ * Escape special regex characters in a string.
+ */
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
  * Assert that a command result has the expected exit code.
  */
 export function assertExitCode(result: RunResult, expected: number): void {
@@ -120,7 +127,10 @@ export function assertEnvFileHasVar(
   const content = readFileSync(envPath, "utf-8");
 
   // Match VAR=value, VAR="value", or VAR='value'
-  const pattern = new RegExp(`^${varName}=["']?${expectedValue}["']?$`, "m");
+  const pattern = new RegExp(
+    `^${escapeRegExp(varName)}=["']?${escapeRegExp(String(expectedValue))}["']?$`,
+    "m"
+  );
   expect(
     content,
     `Env file ${envPath} should have ${varName}=${expectedValue}\nActual content:\n${content}`
@@ -136,7 +146,9 @@ export function getEnvVar(envPath: string, varName: string): string | undefined 
     return undefined;
   }
   const content = readFileSync(envPath, "utf-8");
-  const match = content.match(new RegExp(`^${varName}=["']?(.+?)["']?$`, "m"));
+  const match = content.match(
+    new RegExp(`^${escapeRegExp(varName)}=["']?(.+?)["']?$`, "m")
+  );
   return match?.[1];
 }
 
