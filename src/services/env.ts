@@ -10,6 +10,11 @@ export interface HardcodedPort {
   ports: string[];
 }
 
+export interface HardcodedContainerName {
+  service: string;
+  containerName: string;
+}
+
 export interface EnvVar {
   name: string;
   value: string;
@@ -446,6 +451,49 @@ export function detectHardcodedComposePorts(composePath: string): HardcodedPort[
 
       if (hardcoded.length > 0) {
         results.push({ service: serviceName, ports: hardcoded });
+      }
+    }
+
+    return results;
+  } catch {
+    // YAML parse error or file read error — return empty to avoid crashing
+    return [];
+  }
+}
+
+/**
+ * Detect hardcoded container names in docker-compose.yml
+ * These cause conflicts when running multiple environments simultaneously
+ */
+export function detectHardcodedContainerNames(composePath: string): HardcodedContainerName[] {
+  try {
+    const content = readFileSync(composePath, "utf-8");
+    const doc = yaml.load(content) as Record<string, unknown> | null;
+
+    if (!doc || typeof doc !== "object") {
+      return [];
+    }
+
+    const services = doc.services as Record<string, unknown> | undefined;
+    if (!services || typeof services !== "object") {
+      return [];
+    }
+
+    const results: HardcodedContainerName[] = [];
+
+    for (const [serviceName, serviceConfig] of Object.entries(services)) {
+      if (!serviceConfig || typeof serviceConfig !== "object") {
+        continue;
+      }
+
+      const containerName = (serviceConfig as Record<string, unknown>).container_name;
+      if (typeof containerName !== "string") {
+        continue;
+      }
+
+      // A container name is hardcoded if it doesn't contain ${
+      if (!containerName.includes("${")) {
+        results.push({ service: serviceName, containerName });
       }
     }
 
