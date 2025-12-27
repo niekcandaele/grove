@@ -4,6 +4,7 @@ import { getPortRegistryPath, getOverridesDir } from "../utils/paths.js";
 import { getWorktreeByName, removeWorktree } from "../services/git.js";
 import { releasePorts, getPortsForEnvironment } from "../services/ports.js";
 import { removeDockerOverride, getOverridePath } from "../services/env.js";
+import { isInsideZellij, closeTabByName } from "../services/zellij.js";
 import { confirm } from "../utils/prompt.js";
 
 export const deleteCommand = defineCommand({
@@ -135,6 +136,19 @@ export const deleteCommand = defineCommand({
     const overrideRemoved = removeDockerOverride(projectRoot, envName);
     if (overrideRemoved) {
       console.log(`  Removed Docker override`);
+    }
+
+    // Close Zellij tab if inside Zellij session
+    if (isInsideZellij()) {
+      if (verbose) {
+        console.log(`[verbose] Closing Zellij tab for environment...`);
+      }
+      const tabClosed = closeTabByName(envName);
+      if (tabClosed) {
+        console.log(`  Closed Zellij tab`);
+      } else if (verbose) {
+        console.log(`[verbose] No Zellij tab found for "${envName}"`);
+      }
     }
 
     console.log("");
