@@ -1,0 +1,84 @@
+# Docker Compose for Grove E2E Testing
+#
+# Run all variants:
+#   docker compose -f docker/docker-compose.e2e.yml up --build
+#
+# Run single variant:
+#   docker compose -f docker/docker-compose.e2e.yml run --rm e2e-base
+#
+# Build images:
+#   docker compose -f docker/docker-compose.e2e.yml build
+
+x-common: &common
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile.e2e
+  volumes:
+    # Mount pre-built binary (source/deps are in the image)
+    - ../dist/grove-linux-x64:/usr/local/bin/grove:ro
+    # Writable temp directory for tests
+    - /tmp
+  working_dir: /workspace
+  environment:
+    GROVE_BIN: /usr/local/bin/grove
+    CI: "true"
+    # Disable colors in test output for cleaner logs
+    NO_COLOR: "1"
+
+services:
+  # Base environment - git only, no optional dependencies
+  e2e-base:
+    <<: *common
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.e2e
+      args:
+        WITH_ZELLIJ: "0"
+        WITH_FZF: "0"
+
+  # With FZF only
+  e2e-fzf:
+    <<: *common
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.e2e
+      args:
+        WITH_ZELLIJ: "0"
+        WITH_FZF: "1"
+
+  # With Zellij only (outside session)
+  e2e-zellij:
+    <<: *common
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.e2e
+      args:
+        WITH_ZELLIJ: "1"
+        WITH_FZF: "0"
+
+  # Full environment - both dependencies
+  e2e-full:
+    <<: *common
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.e2e
+      args:
+        WITH_ZELLIJ: "1"
+        WITH_FZF: "1"
+
+  # Simulate being inside a Zellij session
+  # Sets ZELLIJ env var to trigger session-specific code paths
+  e2e-zellij-session:
+    <<: *common
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.e2e
+      args:
+        WITH_ZELLIJ: "1"
+        WITH_FZF: "1"
+    environment:
+      GROVE_BIN: /usr/local/bin/grove
+      CI: "true"
+      NO_COLOR: "1"
+      # Simulates being inside a Zellij session
+      ZELLIJ: "grove-test-session"
