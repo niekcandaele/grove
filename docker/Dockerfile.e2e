@@ -9,9 +9,11 @@
 #   fzf:     WITH_ZELLIJ=0 WITH_FZF=1
 #   zellij:  WITH_ZELLIJ=1 WITH_FZF=0
 #   full:    WITH_ZELLIJ=1 WITH_FZF=1
+#   docker:  WITH_DOCKER=1 (enables docker compose tests)
 
 ARG WITH_ZELLIJ=0
 ARG WITH_FZF=0
+ARG WITH_DOCKER=0
 
 FROM debian:bookworm-slim AS base
 
@@ -58,8 +60,18 @@ RUN if [ "$WITH_ZELLIJ" = "1" ]; then \
       && chmod +x /usr/local/bin/zellij; \
     fi
 
+# ---- Docker CLI Installation ----
+FROM with-zellij AS with-docker
+ARG WITH_DOCKER
+# Install Docker CLI for docker compose tests (requires socket mount at runtime)
+RUN if [ "$WITH_DOCKER" = "1" ]; then \
+      apt-get update && apt-get install -y --no-install-recommends \
+        docker.io \
+      && rm -rf /var/lib/apt/lists/*; \
+    fi
+
 # ---- Final Runtime ----
-FROM with-zellij AS runtime
+FROM with-docker AS runtime
 
 WORKDIR /workspace
 

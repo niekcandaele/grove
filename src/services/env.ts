@@ -118,13 +118,15 @@ function mergeEnvContent(baseContent: string, overlay: Map<string, string>): str
 
 /**
  * Update port values in .env content
+ * Returns the updated content and a list of port keys that were not found
  */
 export function updateEnvPorts(
   content: string,
   portMap: Record<string, number>
-): string {
+): { content: string; missing: string[] } {
   const lines = content.split("\n");
   const result: string[] = [];
+  const found = new Set<string>();
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -144,6 +146,7 @@ export function updateEnvPorts(
     const key = trimmed.slice(0, eqIndex).trim();
 
     if (key in portMap) {
+      found.add(key);
       // Replace the value, preserving key and any leading whitespace
       const leadingWhitespace = line.match(/^\s*/)?.[0] || "";
       result.push(`${leadingWhitespace}${key}=${portMap[key]}`);
@@ -152,7 +155,8 @@ export function updateEnvPorts(
     }
   }
 
-  return result.join("\n");
+  const missing = Object.keys(portMap).filter(k => !found.has(k));
+  return { content: result.join("\n"), missing };
 }
 
 /**
@@ -163,7 +167,7 @@ export function copyEnvFile(
   worktreePath: string,
   mainWorktreePath: string
 ): boolean {
-  const envExamplePath = join(worktreePath, ".env.example");
+  const envExamplePath = join(mainWorktreePath, ".env.example");
   const envPath = join(worktreePath, ".env");
   const mainEnvPath = join(mainWorktreePath, ".env");
 
@@ -243,8 +247,20 @@ export function configureEnvFile(
   }
 
   const content = readFileSync(envPath, "utf-8");
-  const updated = updateEnvPorts(content, portMap);
-  writeFileSync(envPath, updated, { mode: 0o600 });
+  const { content: updated, missing } = updateEnvPorts(content, portMap);
+
+  let finalContent = updated;
+  if (missing.length > 0) {
+    if (!finalContent.endsWith("\n")) {
+      finalContent += "\n";
+    }
+    finalContent += "\n# Grove allocated ports\n";
+    for (const key of missing) {
+      finalContent += `${key}=${portMap[key]}\n`;
+    }
+  }
+
+  writeFileSync(envPath, finalContent, { mode: 0o600 });
 }
 
 /**

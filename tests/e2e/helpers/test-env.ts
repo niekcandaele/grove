@@ -34,6 +34,8 @@ export interface TestEnvOptions {
   groveConfig?: Record<string, unknown>;
   /** Number of initial commits to create (default: 1) */
   initialCommits?: number;
+  /** Content for docker-compose.yml file */
+  dockerComposeContent?: string;
 }
 
 /**
@@ -102,6 +104,13 @@ export function setupTestEnvironment(options: TestEnvOptions = {}): TestEnvironm
     writeFileSync(join(repoDir, ".env.example"), options.envExampleContent);
     execSync("git add .env.example", { cwd: repoDir, env, stdio: "pipe" });
     execSync('git commit --quiet -m "Add .env.example"', { cwd: repoDir, env, stdio: "pipe" });
+  }
+
+  // Add docker-compose.yml if provided
+  if (options.dockerComposeContent) {
+    writeFileSync(join(repoDir, "docker-compose.yml"), options.dockerComposeContent);
+    execSync("git add docker-compose.yml", { cwd: repoDir, env, stdio: "pipe" });
+    execSync('git commit --quiet -m "Add docker-compose.yml"', { cwd: repoDir, env, stdio: "pipe" });
   }
 
   return {
