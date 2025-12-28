@@ -82,3 +82,22 @@ services:
       NO_COLOR: "1"
       # Simulates being inside a Zellij session
       ZELLIJ: "grove-test-session"
+
+  # Docker Compose tests - requires Docker CLI and socket access
+  # Use for testing port allocation with real containers
+  e2e-docker:
+    <<: *common
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.e2e
+      args:
+        WITH_ZELLIJ: "0"
+        WITH_FZF: "0"
+        WITH_DOCKER: "1"
+    volumes:
+      - ../dist/grove-linux-x64:/usr/local/bin/grove:ro
+      - /tmp
+      # Mount Docker socket for container access
+      - /var/run/docker.sock:/var/run/docker.sock
+    # Run as root to access Docker socket (or configure docker group)
+    user: root

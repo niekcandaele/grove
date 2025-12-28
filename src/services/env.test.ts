@@ -107,32 +107,41 @@ describe("updateEnvPorts", () => {
     const content = "HTTP_PORT=3000\nDB_PORT=5432";
     const result = updateEnvPorts(content, { HTTP_PORT: 30001, DB_PORT: 30002 });
 
-    expect(result).toContain("HTTP_PORT=30001");
-    expect(result).toContain("DB_PORT=30002");
+    expect(result.content).toContain("HTTP_PORT=30001");
+    expect(result.content).toContain("DB_PORT=30002");
+    expect(result.missing).toHaveLength(0);
   });
 
   it("preserves non-port lines", () => {
     const content = "NAME=test\nHTTP_PORT=3000\nDESC=description";
     const result = updateEnvPorts(content, { HTTP_PORT: 30001 });
 
-    expect(result).toContain("NAME=test");
-    expect(result).toContain("DESC=description");
-    expect(result).toContain("HTTP_PORT=30001");
+    expect(result.content).toContain("NAME=test");
+    expect(result.content).toContain("DESC=description");
+    expect(result.content).toContain("HTTP_PORT=30001");
   });
 
   it("preserves comments and empty lines", () => {
     const content = "# Comment\n\nHTTP_PORT=3000";
     const result = updateEnvPorts(content, { HTTP_PORT: 30001 });
 
-    expect(result).toContain("# Comment");
-    expect(result).toContain("HTTP_PORT=30001");
+    expect(result.content).toContain("# Comment");
+    expect(result.content).toContain("HTTP_PORT=30001");
   });
 
   it("preserves leading whitespace", () => {
     const content = "  HTTP_PORT=3000";
     const result = updateEnvPorts(content, { HTTP_PORT: 30001 });
 
-    expect(result).toBe("  HTTP_PORT=30001");
+    expect(result.content).toBe("  HTTP_PORT=30001");
+  });
+
+  it("returns missing keys not found in content", () => {
+    const content = "HTTP_PORT=3000";
+    const result = updateEnvPorts(content, { HTTP_PORT: 30001, NEW_PORT: 30002 });
+
+    expect(result.content).toContain("HTTP_PORT=30001");
+    expect(result.missing).toEqual(["NEW_PORT"]);
   });
 });
 
@@ -155,8 +164,8 @@ describe("copyEnvFile", () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it("copies .env.example when it exists", () => {
-    writeFileSync(join(worktreePath, ".env.example"), "FOO=bar");
+  it("copies .env.example from main worktree when it exists", () => {
+    writeFileSync(join(mainWorktreePath, ".env.example"), "FOO=bar");
 
     const result = copyEnvFile(worktreePath, mainWorktreePath);
 
@@ -182,7 +191,7 @@ describe("copyEnvFile", () => {
   });
 
   it("merges .env.example with main .env values", () => {
-    writeFileSync(join(worktreePath, ".env.example"), "EXAMPLE=yes\nSHARED=example");
+    writeFileSync(join(mainWorktreePath, ".env.example"), "EXAMPLE=yes\nSHARED=example");
     writeFileSync(join(mainWorktreePath, ".env"), "MAIN=no\nSHARED=main");
 
     copyEnvFile(worktreePath, mainWorktreePath);
